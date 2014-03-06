@@ -18,16 +18,99 @@ TR_TABLE = 'exoplanets_transiting.fits' # fits file for known exoplanets that tr
 
 
 
-
-def emission( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_eclipses.txt', download_latest=True ):
+def reflection( wav=0.55, wav_ref=0.55, obj_ref='HD189733', outfile='signals_reflection.txt', download_latest=True ):
     """
     Generates a table of properties relevant to eclipse measurements at a specified
-    wavelength for all known transiting exoplanets. Basic temperature equilibrium is
-    assumed, with idealised Planck blackbody spectra. Perhaps the most useful column
-    of the output table is the one that gives the expected signal-to-noise of the
-    eclipse **relative to the signal-to-noise for a reference planet at a reference
-    wavelength**. A relative signal-to-noise is used due to the unknown normalising
-    constant when working with magnitudes at arbitrary wavelengths.
+    wavelength for all known transiting exoplanets, assuming reflected starlight only.
+    Eclipse depths are quoted assuming a geometric albedo of 1. The expected signal
+    for lower albedos scales linearly as a function of the geometric albedo.
+    Perhaps the most useful column of the output table is the one that gives the
+    expected signal-to-noise of the eclipse **relative to the signal-to-noise for a
+    reference planet at a reference wavelength**. A relative signal-to-noise is used
+    due to the unknown normalising constant when working with magnitudes at arbitrary
+    wavelengths.
+    """
+    
+    # Convert the wavelengths from microns to metres:
+    wav = wav / 1e6
+    wav_ref = wav_ref / 1e6
+
+    # Get table data for planets that we have enough information on:
+    t = filter_table( sigtype='reflection', download_latest=download_latest )
+    nplanets = len( t.NAME )
+
+    RpRs = ( ( t.R * RJUP)/( t.RSTAR * RSUN ) )
+    aRs = ( ( t.a * AU2M)/( t.RSTAR * RSUN ) )
+    Ag = 1.0 # for reference
+
+    # Convert the above to ratio of planet-to-stellar flux:
+    fratio = Ag*( ( RpRs/aRs )**2. )
+    
+    # Using the known V ( ~0.55microns ) magnitude as a reference,
+    # approximate the magnitude in the current wavelength of interest:
+    vratio = planck( wav, t.TEFF )/planck( wav_ref*( 1e-6 ), t.TEFF )
+    mag_star = t.V - 2.5 * np.log10( vratio )
+
+    # Convert the approximate magnitude to an unnormalised stellar flux 
+    # in the wavelength of interest:
+    flux_star_unnorm = 10**( -mag_star / 2.5 )
+
+    # Use the fact that the signal-to-noise is:
+    #   signal:noise = f_planet / sqrt( flux_star )
+    #                = sqrt( f_star ) * fratio
+    # but note that we still have the normalising
+    # constant to be taken care of (see next):
+    snr_unnorm = np.sqrt( flux_star_unnorm )*fratio
+
+    # The signal-to-noise ratio is still not normalised, so we need to repeat
+    # the above for another reference star; seeing as the normalising constant
+    # It might be useful to put the signal-to-noise in different units, namely,
+    # compare the size of the current signal to that of another reference target 
+    # at some reference wavelength. Basically repeat the above for the reference:
+    ii = ( t.NAME==obj_ref )
+    RpRs_ref = ( t.R[ii] * RJUP )/( t.RSTAR[ii] * RSUN )
+    aRs_ref = ( t.a[ii] * AU2M )/( t.RSTAR[ii] * RSUN )
+    fratio_ref = Ag*( ( RpRs_ref/aRs_ref )**2. )
+    vratio_ref = planck( wav_ref, t.TEFF[ii] ) / planck( ( wav_ref*( 1e-6 ), t.TEFF[ii] )
+    mag_ref = t.V[ii] - 2.5 * np.log10( vratio_ref )
+    flux_ref = 10**( -mag_ref/2.5 )
+    snr_ref = np.sqrt( flux_ref )*fratio_ref
+
+    # Reexpress the signal-to-noise of our target as a scaling of the reference
+    # signal-to-noise:
+    snr_norm = snr_unnorm / snr_ref
+
+    # Rearrange the targets in order of the most promising:
+    s = np.argsort( snr_norm )
+    s = s[::-1]
+
+    # Open the output file and write the column headings:
+    ofile = open( outfile, 'w' )
+    header = make_header_reflection( nplanets, wav, wav_ref, obj_ref )
+    ofile.write( header )
+    
+    for j in range( nplanets ):
+        i = s[j]
+        outstr = make_outstr_ec( j+1, t.NAME[i], t.RA[i], t.DEC[i], t.V[i], \
+                                 t.TEFF[i], t.RSTAR[i], t.R[i], t.A[i], Temp_eq[i], \
+                                 fratio[i], snr_norm[i] )
+        ofile.write( outstr )
+    ofile.close()
+    print 'Saved output in {0}'.format( outfile )
+    
+    return outfile
+
+    
+def thermal( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_thermal.txt', download_latest=True ):
+    """
+    Generates a table of properties relevant to eclipse measurements at a specified
+    wavelength for all known transiting exoplanets, assuming thermal emission only.
+    Basic temperature equilibrium is assumed, with idealised Planck blackbody spectra.
+    Perhaps the most useful column of the output table is the one that gives the
+    expected signal-to-noise of the eclipse **relative to the signal-to-noise for a
+    reference planet at a reference wavelength**. A relative signal-to-noise is used
+    due to the unknown normalising constant when working with magnitudes at arbitrary
+    wavelengths.
     """
 
     # Convert the wavelengths from microns to metres:
@@ -35,7 +118,7 @@ def emission( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_eclips
     wav_ref = wav_ref / 1e6
 
     # Get table data for planets that we have enough information on:
-    t = filter_table( sigtype='emission', download_latest=download_latest )
+    t = filter_table( sigtype='thermal', download_latest=download_latest )
     nplanets = len( t.NAME )
 
     # Calculate the equilibrium temperatures for all planets on list:
@@ -91,7 +174,7 @@ def emission( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_eclips
 
     # Open the output file and write the column headings:
     ofile = open( outfile, 'w' )
-    header = make_header_ec( nplanets, wav, wav_ref, obj_ref )
+    header = make_header_thermal( nplanets, wav, wav_ref, obj_ref )
     ofile.write( header )
     
     for j in range( nplanets ):
@@ -104,6 +187,7 @@ def emission( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_eclips
     print 'Saved output in {0}'.format( outfile )
     
     return outfile
+
 
 def transmission( wav_vis=0.7, wav_ir=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_transits.txt', download_latest=True ):
     """
@@ -215,7 +299,7 @@ def transmission( wav_vis=0.7, wav_ir=2.2, wav_ref=2.2, obj_ref='WASP-19 b', out
 
     # Open the output file and write the column headings:
     ofile = open( outfile, 'w' )
-    header = make_header_tr( nplanets, wav_vis, wav_ir, wav_ref, obj_ref, n )
+    header = make_header_transmission( nplanets, wav_vis, wav_ir, wav_ref, obj_ref, n )
     ofile.write( header )
     
     for j in range( nplanets ):
@@ -252,15 +336,17 @@ def filter_table( sigtype=None, download_latest=True ):
     t = t.where( np.isfinite( t.R ) ) # planetary radius
     t = t.where( np.isfinite( t.A ) ) # semimajor axis
     t = t.where( np.isfinite( t.TEFF ) ) # stellar effective temperature
-    if sigtype=='emission':
+    if sigtype=='thermal':
         t = t.where( np.isfinite( t.KS ) ) # stellar Ks magnitude
-    if sigtype=='transmission':
+    elif sigtype=='transmission':
         t = t.where( np.isfinite( t.KS ) + np.isfinite( t.V ) ) # stellar Ks and/or V magnitude
         try:
             t = t.where( ( np.isfinite( t.MSINI ) * ( t.MSINI>0 ) + \
                            ( np.isfinite( t.MASS ) * ( t.MASS>0 ) ) ) ) # MSINI and MASS available
         except:
             t = t.where( ( np.isfinite( t.MSINI ) * ( t.MSINI>0 ) ) ) # only MSINI available
+    elif sigtype=='reflection':
+        t = t.where( np.isfinite( t.V ) ) # stellar V magnitude
 
     return t
 
@@ -293,7 +379,7 @@ def planck( wav, temp ):
     return bbflux
 
 
-def make_header_ec( nplanets, wav, wav_ref, obj_ref ):
+def make_header_thermal( nplanets, wav, wav_ref, obj_ref ):
     """
     Generates a header in a string format that can be written to
     the top of the eclipses output file.
@@ -355,7 +441,69 @@ def make_header_ec( nplanets, wav, wav_ref, obj_ref ):
     return header
     
 
-def make_header_tr( nplanets, wav_vis, wav_ir, wav_ref, obj_ref, n ):
+def make_header_reflection( nplanets, wav, wav_ref, obj_ref ):
+    """
+    Generates a header in a string format that can be written to
+    the top of the eclipses output file.
+    """
+
+    col1a = 'Rank'.center( 4 )
+    col1b = ' '.center( 4 )
+    col2a = 'Name'.center( 15 )
+    col2b = ' '.center( 15 )
+    col3a = 'RA'.center( 11 )
+    col3b = ' '.center( 11 )
+    col4a = 'Dec'.center( 12 )
+    col4b = ' '.center( 12 )
+    col5a = 'V '.rjust( 5 )
+    col5b = '(mag)'.rjust( 5 )
+    col6a = 'Tstar'.center( 6 )
+    col6b = '(K)'.center( 6 )
+    col7a = 'Rstar'.center( 6 )
+    col7b = '(Rsun)'.center( 6 )
+    col8a = 'Rp'.center( 6 )
+    col8b = '(Rjup)'.center( 6 )
+    col9a = 'a'.center( 5 )
+    col9b = '(AU)'.center( 5 )
+    col10a = 'Tpeq'.rjust( 5 )
+    col10b = '(K)'.rjust( 5 )
+    col11a = 'Fp/Fs'.rjust( 6 )
+    col11b = '(1e-4)'.rjust( 6 )
+    col12a = 'S/N'.rjust( 6 )
+    col12b = ' '.rjust( 6 )
+    colheadingsa = '# {0}{1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11}\n'\
+                  .format( col1a, col2a, col3a, col4a, col5a, col6a, \
+                          col7a, col8a, col9a, col10a, col11a, col12a )
+    colheadingsb = '# {0}{1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11}\n'\
+                  .format( col1b, col2b, col3b, col4b, col5b, col6b, \
+                          col7b, col8b, col9b, col10b, col11b, col12b )
+    nchar = max( [ len( colheadingsa ), len( colheadingsb ) ] )
+
+    header  = '{0}\n'.format( '#'*nchar )
+    header += '# Eclipse estimates at {0:.2f} micron arranged in order of increasing\n'.format( (1e6)*wav )
+    header += '# detectability for {0:d} known transiting exoplanets\n#\n'.format( nplanets )
+    header += '# Values for \'K\', \'Tstar\', \'Rstar\', \'Rp\', \'a\' are taken from the literature \n#\n'
+    header += '# Other quantities are derived as follows:\n#\n'
+    header += '#  \'Tpeq\' is the equilibrium effective temperature of the planet assuming \n'
+    header += '#    absorption of all incident star light and uniform redistribution\n'
+    header += '#       --->  Tpeq = np.sqrt( Rstar / 2. / a ) * Tstar \n#\n'
+    header += '#  \'Fp/Fs\' is the ratio of the planetary dayside flux to the stellar flux\n'
+    header += '#       --->  Fp/Fs = ( P(Tplanet)/P(Tstar) ) * ( Rplanet / Rstar )**2 \n'
+    header += '#                 where P is the Planck function\n#\n'
+    header += '#  \'S/N\' is the signal-to-noise estimated using the known stellar brightness\n'
+    header += '#    and expressed relative to the S/N expected for {0} at {1:.2f} micron\n'.format( obj_ref, (1e6)*wav_ref )
+    header += '#       --->  S/N_ref = Fp_ref / sqrt( Fs_ref )\n'
+    header += '#       --->  S/N_targ = Fp / sqrt( Fs ) \n'
+    header += '#       --->  S/N = S/N_target / S/N_ref\n#\n'
+    header += '{0}\n#\n'.format( '#'*nchar )
+    header += colheadingsa
+    header += colheadingsb
+    header += '{0}{1}\n'.format( '#', '-'*( nchar-1 ) )
+
+    return header
+    
+
+def make_header_transmission( nplanets, wav_vis, wav_ir, wav_ref, obj_ref, n ):
     """
     Generates a header in a string format that can be written to
     the top of the transits output file.
