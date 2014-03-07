@@ -18,7 +18,8 @@ MUJUP = 2.22e-3 # jupiter atmosphere mean molecular weight in kg/mole
 TR_TABLE = 'exoplanets_transiting.fits' # fits file for known exoplanets that transit
 
 
-def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b', outfile='signals_reflection.txt', download_latest=True ):
+def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b', \
+                outfile='signals_reflection.txt', download_latest=True ):
     """
     Generates a table of properties relevant to eclipse measurements at a specified
     wavelength for all known transiting exoplanets, assuming reflected starlight only.
@@ -41,7 +42,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     wav_ref_m = wav_ref_um*( 1e-6 )
 
     # Central wavelength of V band in m:
-    wav_V_m = 0.55*( 1e-6 )
+    wav_V_m = 0.55e-6
 
     # Get table data for planets that we have enough information on:
     t = filter_table( sigtype='reflection', download_latest=download_latest )
@@ -58,6 +59,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     # Convert the above to ratio of planet-to-stellar flux:
     fratio_reflection = Ag*( ( RpRs/aRs )**2. )
 
+    # Calculate thermal emission signals for each planet:
     Bp = np.zeros( nplanets )
     Bs = np.zeros( nplanets )
     for i in range( nplanets ):
@@ -148,7 +150,8 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     return outfile
 
     
-def thermal( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_thermal.txt', download_latest=True ):
+def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
+             outfile='signals_thermal.txt', download_latest=True ):
     """
     Generates a table of properties relevant to eclipse measurements at a specified
     wavelength for all known transiting exoplanets, assuming thermal emission only.
@@ -161,8 +164,11 @@ def thermal( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_thermal
     """
 
     # Convert the wavelengths from microns to metres:
-    wav = wav / 1e6
-    wav_ref = wav_ref / 1e6
+    wav_meas_m = wav_meas_um*( 1e-6 )
+    wav_ref_m = wav_ref_um*( 1e-6 )
+
+    # Central wavelength of K band in m:
+    wav_K_m = 2.2e-6
 
     # Get table data for planets that we have enough information on:
     t = filter_table( sigtype='thermal', download_latest=download_latest )
@@ -171,18 +177,21 @@ def thermal( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_thermal
     # Calculate the equilibrium temperatures for all planets on list:
     tpeq = Teq( t )
 
+    # Calculate the radii ratios for each planet:
+    RpRs = ( t.R*RJUP )/( t.RSTAR*RSUN )
+
     # Assuming black body radiation, calculate the ratio between the
     # energy emitted by the planet per m^2 of surface per second,
     # compared to the star:
-    bratio = planck( wav, tpeq ) / planck( wav, t.TEFF )
+    bratio = planck( wav_meas_m, tpeq )/planck( wav_meas_m, t.TEFF )
 
     # Convert the above to the ratio of the measured fluxes:
-    fratio = bratio * ( ( t.R * RJUP) / ( t.RSTAR * RSUN ) )**2
+    fratio = bratio*( RpRs**2 )
 
     # Using the known Ks ( ~2.2microns ) magnitude as a reference,
     # approximate the magnitude in the current wavelength of interest:
-    kratio = planck( wav, t.TEFF ) / planck( 2.2e-6, t.TEFF )
-    mag_star = t.KS - 2.5 * np.log10( kratio )
+    kratio = planck( wav_meas_m, t.TEFF )/planck( wav_K_m, t.TEFF )
+    mag_star = t.KS - 2.5*np.log10( kratio )
     # Note that this assumes the magnitude of the reference star that
     # the magnitudes such as t.KS are defined wrt is approximately the
     # same at wav and 2.2 microns.
@@ -199,25 +208,32 @@ def thermal( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_thermal
     snr_unnorm = np.sqrt( flux_star_unnorm ) * fratio
 
     # The signal-to-noise ratio is still not normalised, so we need to repeat
-    # the above for another reference star; seeing as the normalising constant
-    # It might be useful to put the signal-to-noise in different units, namely,
-    # compare the size of the current signal to that of another reference target 
-    # at some reference wavelength. Basically repeat the above for the reference:
+    # the above for another reference star; in fact, we want to compare the
+    # signal-to-noise for our target at the measurement wavelength with the
+    # signal-to-noise of a reference object at some reference wavelength which
+    # may or may not be the same as the measurement wavelength; we choose the
+    # reference system and reference wavelength to be 'familiar' signals so
+    # that we can get a better feel for the size of our target signal at the
+    # wavelength we actually want to measure:
     names = []
     for name in t.NAME:
         names += [ name.replace( ' ', '' ) ]
     names = np.array( names, dtype=str )
     ii = ( names==obj_ref )
-    bratio_ref = planck( wav_ref, tpeq[ii] ) / planck( wav_ref, t.TEFF[ii] )
-    fratio_ref = bratio_ref * ( ( t.R[ii] * RJUP ) / ( t.RSTAR[ii] * RSUN ) )**2
-    kratio_ref = planck( wav_ref, t.TEFF[ii] ) / planck( 2.2e-6, t.TEFF[ii] )
-    mag_ref = t.KS[ii] - 2.5 * np.log10( kratio_ref )
+    bratio_ref = planck( wav_ref_m, tpeq[ii] )/planck( wav_ref_m, t.TEFF[ii] )
+    fratio_ref = bratio_ref*( ( t.R[ii]*RJUP )/( t.RSTAR[ii]*RSUN ) )**2
+    kratio_ref = planck( wav_ref_m, t.TEFF[ii] )/planck( wav_K_m, t.TEFF[ii] )
+    mag_ref = t.KS[ii] - 2.5*np.log10( kratio_ref )
     flux_ref = 10**( -mag_ref/2.5 )
-    snr_ref = np.sqrt( flux_ref ) * fratio_ref
 
-    # Reexpress the signal-to-noise of our target as a scaling of the reference
-    # signal-to-noise:
-    snr_norm = snr_unnorm / snr_ref
+    # Then we calculate the signal to noise of the measurement at the
+    # reference wavelength for the reference system:
+    snr_ref = np.sqrt( flux_ref )*fratio_ref
+
+    # Reexpress the signal-to-noise of our target at the measurement wavelength
+    # as a scaling of the signal-to-noise of the reference system at the
+    # reference wavelength:
+    snr_norm = snr_unnorm/snr_ref
 
     # Rearrange the targets in order of the most promising:
     s = np.argsort( snr_norm )
@@ -225,9 +241,10 @@ def thermal( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_thermal
 
     # Open the output file and write the column headings:
     ofile = open( outfile, 'w' )
-    header = make_header_thermal( nplanets, wav, wav_ref, obj_ref )
+    header = make_header_thermal( nplanets, wav_meas_m, wav_ref_m, obj_ref )
     ofile.write( header )
     
+    # Write the output rows to file and save:
     for j in range( nplanets ):
         i = s[j]
         outstr = make_outstr_thermal( j+1, t.NAME[i], t.RA[i], t.DEC[i], t.KS[i], \
@@ -240,9 +257,20 @@ def thermal( wav=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_thermal
     return outfile
 
 
-def transmission( wav_vis=0.7, wav_ir=2.2, wav_ref=2.2, obj_ref='WASP-19 b', outfile='signals_transits.txt', download_latest=True ):
+def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
+                  outfile='signals_transits.txt', download_latest=True ):
     """
-    
+    Generates a table of properties relevant to transmission spectroscopy measurements
+    at a specified wavelength for all known transiting exoplanets. 
+    Eclipse depths are quoted assuming a geometric albedo of 1. The expected signal
+    for lower albedos scales linearly as a function of the geometric albedo, according
+    to:  delta_flux = Ag*( ( RpRs/aRs )**2 )
+
+    Perhaps the most useful column of the output table is the one that gives the
+    expected signal-to-noise of the eclipse **relative to the signal-to-noise for a
+    reference planet at a reference wavelength**. A relative signal-to-noise is used
+    due to the unknown normalising constant when working with magnitudes at arbitrary
+    wavelengths. Note that we 
     """
 
     # Calculate transmission signal as the variation in flux drop
@@ -253,9 +281,13 @@ def transmission( wav_vis=0.7, wav_ir=2.2, wav_ref=2.2, obj_ref='WASP-19 b', out
     n = 1
 
     # Convert the wavelengths from microns to metres:
-    wav_vis = wav_vis / 1e6
-    wav_ir = wav_ir / 1e6    
-    wav_ref = wav_ref / 1e6
+    wav_vis_m = wav_vis_um*( 1e-6 )
+    wav_ir_m = wav_ir_um*( 1e-6 )
+    wav_ref_m = wav_ref_um*( 1e-6 )
+
+    # Central wavelengths of V and K bands in m:
+    wav_V_m = 0.55e-6
+    wav_K_m = 2.2e-6
 
     # Make we exclude table rows that do not contain
     # all the necessary properties:
@@ -273,6 +305,9 @@ def transmission( wav_vis=0.7, wav_ir=2.2, wav_ref=2.2, obj_ref='WASP-19 b', out
     # Calculate the approximate planetary equilibrium temperature:
     tpeq = Teq( t )
 
+    # Calculate the radii ratios for each planet:
+    RpRs = ( t.R*RJUP )/( t.RSTAR*RSUN )
+
     # Calculate the gravitaional accelerations at the surface zero-level:
     MPLANET = np.zeros( nplanets )
     for i in range( nplanets ):
@@ -281,46 +316,45 @@ def transmission( wav_vis=0.7, wav_ir=2.2, wav_ref=2.2, obj_ref='WASP-19 b', out
         except:
             MPLANET[i] = np.array( t.MSINI[i], dtype=float )
             print t.NAME[i]
-    little_g = G * MPLANET * MJUP / ( t.R * RJUP )**2
+    little_g = G*MPLANET*MJUP/( ( t.R*RJUP )**2 )
 
     # Calculate the atmospheric scale height in metres; note that
     # we use RGAS instead of KB because MUJUP is **per mole**:
-    Hatm = RGAS * tpeq / MUJUP / little_g
+    Hatm = RGAS*tpeq/MUJUP/little_g
 
     # Calculate the approximate change in transit depth for a
     # wavelength range where some species in the atmosphere
     # increases the opacity of the planetary limb for an additional
     # 2.5 (i.e. 5/2) scale heights:
-    depth_tr = ( ( t.R * RJUP ) / ( t.RSTAR * RSUN ) )**2
-    delta_tr = 2 * n * ( t.R * RJUP ) * Hatm / ( t.RSTAR * RSUN )**2
+    depth_tr = RpRs**2.
+    delta_tr = 2*n*( t.R*RJUP )*Hatm/( ( t.RSTAR*RSUN )**2 )
 
     # Using the known Ks magnitude of the target, estimate the
     # unnormalised signal-to-noise ratio of the change in transit
     # depth that we would measure in the visible and IR separately:
-    bratio = planck( wav_vis, t.TEFF ) / planck( 2.2e-6, t.TEFF )
-    mag = t.KS - 2.5 * np.log10( bratio )
+    bratio = planck( wav_vis_m, t.TEFF )/planck( wav_K_m, t.TEFF )
+    mag = t.KS - 2.5*np.log10( bratio )
     flux_unnorm = 10**( -mag/2.5 )
-    snr_unnorm_vis = np.sqrt( flux_unnorm ) * delta_tr
+    snr_unnorm_vis = np.sqrt( flux_unnorm )*delta_tr
 
-    bratio = planck( wav_ir, t.TEFF ) / planck( 2.2e-6, t.TEFF )
-    mag = t.KS - 2.5 * np.log10( bratio )
+    bratio = planck( wav_ir_m, t.TEFF )/planck( wav_K_m, t.TEFF )
+    mag = t.KS - 2.5*np.log10( bratio )
     flux_unnorm = 10**( -mag/2.5 )
-    snr_unnorm_ir = np.sqrt( flux_unnorm ) * delta_tr
+    snr_unnorm_ir = np.sqrt( flux_unnorm )*delta_tr
 
     # Repeat the above using the known V band for any that didn't
     # have known KS magnitudes:
     ixs = ( np.isfinite( t.KS )==False )
     
-    bratio = planck( wav_vis, t.TEFF[ixs] ) / planck( 0.6e-6, t.TEFF[ixs] )
-    mag = t.V[ixs] - 2.5 * np.log10( bratio )
+    bratio = planck( wav_vis_m, t.TEFF[ixs] )/planck( wav_V_m, t.TEFF[ixs] )
+    mag = t.V[ixs] - 2.5*np.log10( bratio )
     flux_unnorm = 10**( -mag/2.5 )
-    snr_unnorm_vis[ixs] = np.sqrt( flux_unnorm ) * delta_tr[ixs]
+    snr_unnorm_vis[ixs] = np.sqrt( flux_unnorm )*delta_tr[ixs]
 
-    bratio = planck( wav_ir, t.TEFF[ixs] ) / planck( 2.2e-6, t.TEFF[ixs] )
-    mag = t.KS[ixs] - 2.5 * np.log10( bratio )
+    bratio = planck( wav_ir_m, t.TEFF[ixs] )/planck( wav_V_m, t.TEFF[ixs] )
+    mag = t.KS[ixs] - 2.5*np.log10( bratio )
     flux_unnorm = 10**( -mag/2.5 )
-    snr_unnorm_ir[ixs] = np.sqrt( flux_unnorm ) * delta_tr[ixs]
-    
+    snr_unnorm_ir[ixs] = np.sqrt( flux_unnorm )*delta_tr[ixs]
 
     # The signal-to-noise ratio is still not normalised, so we need to repeat
     # the above for another reference star; seeing as the normalising constant
@@ -332,21 +366,21 @@ def transmission( wav_vis=0.7, wav_ir=2.2, wav_ref=2.2, obj_ref='WASP-19 b', out
         names += [ name.replace( ' ', '' ) ]
     names = np.array( names, dtype=str )
     ii = ( names==obj_ref )
-    delta_tr_ref = 2 * n * ( t.R[ii] * RJUP) * Hatm[ii] / ( t.RSTAR[ii] * RSUN )**2
-    kratio_ref = planck( wav_ref, t.TEFF[ii] ) / planck( 2.2e-6, t.TEFF[ii] )
+    delta_tr_ref = 2*n*( t.R[ii]*RJUP )*Hatm[ii]/( ( t.RSTAR[ii]*RSUN )**2 )
+    kratio_ref = planck( wav_ref_m, t.TEFF[ii] )/planck( wav_K_m, t.TEFF[ii] )
 
-    mag_ref_ir = t.KS[ii] - 2.5 * np.log10( kratio_ref )
+    mag_ref_ir = t.KS[ii] - 2.5*np.log10( kratio_ref )
     flux_ref_ir = 10**( -mag_ref_ir/2.5 )
-    snr_ref_ir = np.sqrt( flux_ref_ir ) * delta_tr_ref
+    snr_ref_ir = np.sqrt( flux_ref_ir )*delta_tr_ref
 
-    mag_ref_vis = t.V[ii] - 2.5 * np.log10( kratio_ref )
+    mag_ref_vis = t.V[ii] - 2.5*np.log10( kratio_ref )
     flux_ref_vis = 10**( -mag_ref_vis/2.5 )
-    snr_ref_vis = np.sqrt( flux_ref_vis ) * delta_tr_ref
+    snr_ref_vis = np.sqrt( flux_ref_vis )*delta_tr_ref
 
     # Reexpress the signal-to-noise of our target as a scaling of the reference
     # signal-to-noise:
-    snr_norm_vis = snr_unnorm_vis / snr_ref_vis
-    snr_norm_ir = snr_unnorm_ir / snr_ref_ir
+    snr_norm_vis = snr_unnorm_vis/snr_ref_vis
+    snr_norm_ir = snr_unnorm_ir/snr_ref_ir
 
     # Rearrange the targets in order of the most promising:
     s = np.argsort( snr_norm_vis )
