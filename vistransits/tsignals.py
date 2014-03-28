@@ -31,7 +31,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     expected signal-to-noise of the eclipse **relative to the signal-to-noise for a
     reference planet at a reference wavelength**. A relative signal-to-noise is used
     due to the unknown normalising constant when working with magnitudes at arbitrary
-    wavelengths. Note that we 
+    wavelengths.
     """
     
     # Convert the wavelengths from microns to metres:
@@ -68,6 +68,11 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     fratio_thermal = ( RpRs**2. )*( Bp/Bs )
     fratio_total = fratio_reflection + fratio_thermal
     thermal_frac = fratio_thermal/fratio_reflection
+    # NOTE: Be aware that thermal_frac is actually unphysical. It assumes
+    # zero Bond albedo to calculate the temperature, but then the reflection
+    # signal assumes a geometric albedo of 1. Also, note that the equilibrium
+    # temperature assumes uniform redistribution of heat; to convert to
+    # zero heat redistribution, multiply fratio_thermal by 8/3.
 
     # Using the known V ( ~0.55microns ) magnitude as a reference,
     # approximate the magnitude in the current wavelength of interest:
@@ -261,16 +266,15 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
                   outfile='signals_transits.txt', download_latest=True ):
     """
     Generates a table of properties relevant to transmission spectroscopy measurements
-    at a specified wavelength for all known transiting exoplanets. 
-    Eclipse depths are quoted assuming a geometric albedo of 1. The expected signal
-    for lower albedos scales linearly as a function of the geometric albedo, according
-    to:  delta_flux = Ag*( ( RpRs/aRs )**2 )
+    at a visible wavelength and an IR wavelength for all known transiting exoplanets.
+    Quoted transmission signals are the flux change corresponding to a change in the
+    planetary radius of n=1 atmospheric gas scale heights.
 
-    Perhaps the most useful column of the output table is the one that gives the
-    expected signal-to-noise of the eclipse **relative to the signal-to-noise for a
+    Perhaps the most useful column of the output table is the one that gives the expected
+    signal-to-noise of the transmission signal **relative to the signal-to-noise for a
     reference planet at a reference wavelength**. A relative signal-to-noise is used
     due to the unknown normalising constant when working with magnitudes at arbitrary
-    wavelengths. Note that we 
+    wavelengths.
     """
 
     # Calculate transmission signal as the variation in flux drop
