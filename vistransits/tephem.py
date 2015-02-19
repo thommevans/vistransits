@@ -15,7 +15,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
                   ofilename_byplanet='default', ofilename_chronolog='default',
                   sun_alt_max=-6, sun_alt_twil=-12, sun_alt_dark=-18, \
                   moon_alt_set=-6, target_elev_min=25, oot_deltdur=0.5, \
-                  tr_signals='signals_transits.txt', ec_signals='signals_eclipses.txt', \
+                  tr_signals='signals_transits.txt', thermal_signals='signals_thermal.txt', \
+                  reflect_signals='signals_reflection.txt' ,\
                   exclude_unranked=False, max_rank=None ):
     """
     Calculates the visible transits for a list of targets at a given observatory within
@@ -44,7 +45,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
       **oot_deltdur - Float giving the fraction of the transit duration either side of
           ingress/egress requested for sampling the out-of-transit baseline.
       **tr_signals - Input file containing the estimated transmission signals.
-      **ec_signals - Input file containing the estimated emission signals.
+      **thermal_signals - Input file containing the estimated thermal emission signals.
+      **reflect_signals - Input file containing the estimated reflection signals.
       **exclude_unranked - If set to True, transit/eclipse predictions will ony be made
           for those planets where a transmission/emission signal estimate was possible.
       **max_rank - Lowest ranked signal that output will be printed for; can be set
@@ -59,18 +61,23 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     zenith_max = 90 - target_elev_min
 
     # Read in the basic target information for all transiting exoplanets:
-    targets, vmags, ras, decs, ttrs, pers, durs = read_eph( EPH_FILE )
+    targets_all, vmags, ras, decs, ttrs, pers_all, durs_all = read_eph( EPH_FILE )
+    ntargets_all = len( targets_all )
 
     # Read in the rankings for transit and eclipse signals:
-    targets_ec, ranks_ec = eclipse_ranks( ec_signals )
-    targets_tr, ranks_tr = transit_ranks( tr_signals )    
-
+    if sigtype=='transits':
+        targets, ranks, pers, durs = eclipse_ranks( thermal_signals, targets_all, pers_all, durs_all )
+    elif sigtype=='reflection':
+        targets, ranks, pers, durs = eclipse_ranks( reflect_signals, targets_all, pers_all, durs_all )
+    elif sigtype=='thermal':
+        targets, ranks, pers, durs = transit_ranks( tr_signals, targets_all, pers_all, durs_all )    
+    ntargets = len( targets )
+    
     # Create the databases that will be used by pyephem for calculating
     # ephemerides for each object:
-    ntargets = len( targets )
     dbs = []
-    for i in range( ntargets ):
-        db_str = '{targ},f|S,{ra},{dec},{vmag}'.format( targ=targets[i], \
+    for i in range( ntargets_all ):
+        db_str = '{targ},f|S,{ra},{dec},{vmag}'.format( targ=targets_all[i], \
                                                         ra=ras[i], \
                                                         dec=decs[i], \
                                                         vmag=vmags[i] )
@@ -81,9 +88,9 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
         if sigtype=='transits':
             ofilename_byplanet = '{0}_transits_byplanet.txt'.format( observatory )
             ofilename_chronolog = '{0}_transits_chronolog.txt'.format( observatory )
-        elif sigtype=='eclipses':
-            ofilename_byplanet = '{0}_eclipses_byplanet.txt'.format( observatory )
-            ofilename_chronolog = '{0}_eclipses_chronolog.txt'.format( observatory )            
+        elif sigtype=='thermal':
+            ofilename_byplanet = '{0}_thermal_byplanet.txt'.format( observatory )
+            ofilename_chronolog = '{0}_thermal_chronolog.txt'.format( observatory )            
         else:
             pdb.set_trace() #this shouldn't happen
 
@@ -102,9 +109,13 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     if sigtype=='transits':
         sigtype_lower_singular = 'transit'
         sigtype_upper_singular = 'Transit'
-    else:
-        sigtype_lower_singular = 'eclipse'
-        sigtype_upper_singular = 'Eclipse'
+    elif sigtype=='thermal':
+        sigtype_lower_singular = 'thermal'
+        sigtype_upper_singular = 'Thermal'
+    elif sigtype=='reflection':
+        sigtype_lower_singular = 'reflection'
+        sigtype_upper_singular = 'Reflection'
+
 
     ofile_bp.write( '# Visible primary {0}s from {1} between {2} and {3}, arranged by planet\n#\n'\
                  .format( sigtype_lower_singular, observatory, date_start, date_end ) )
@@ -201,36 +212,21 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
         # Check to see if the current target's signal has been ranked,
         # and if it has, make sure that it was ranked highly enough,
         # otherwise we skip to the next target straight away:
-        if sigtype=='transits':
-            nranked = len( targets_tr )
-            for j in range( nranked ):
-                if targets_tr[j]==target_i.name:
-                    rank_i = int( ranks_tr[j] )
-                    if ( max_rank!=None ):
-                        if ( max_rank != -1 ) * ( rank_i>max_rank ):
-                            include = False
-                        else:
-                            include = True
-                    unranked = False
-                    break
-                else:
-                    if j==nranked-1:
-                        unranked = True
-        elif sigtype=='eclipses':
-            nranked = len( targets_ec )
-            for j in range( nranked ):
-                if targets_ec[j]==target_i.name:
-                    rank_i = int( ranks_ec[j] )
-                    if ( max_rank!=None ):
-                        if ( max_rank!=-1 ) * ( rank_i>max_rank ):
-                            include = False
-                        else:
-                            include = True
-                    unranked = False
-                    break
-                else:
-                    if j==nranked-1:
-                        unranked = True
+        nranked = len( targets )
+        for j in range( nranked ):
+            if targets[j]==target_i.name:
+                rank_i = int( ranks[j] )
+                if ( max_rank!=None ):
+                    if ( max_rank != -1 ) * ( rank_i>max_rank ):
+                        include = False
+                    else:
+                        include = True
+                unranked = False
+                break
+            else:
+                if j==nranked-1:
+                    unranked = True
+
         # See if we want to skip the current target for some reason:
         if unranked==True:
             if exclude_unranked==True:
@@ -315,14 +311,14 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
                     if sigtype=='transits':
                         header_str = '#  {0}   -->   not enough information to rank primary transit signal \n#\n'\
                                      .format( targets[i]  )
-                    else:
+                    elif ( sigtype=='thermal' )+( sigtype=='reflection' ):
                         header_str = '#  {0}   -->   not enough information to rank secondary eclipse signal \n#\n'\
                                      .format( targets[i]  )
                 else:
                     if sigtype=='transits':
                         header_str = '#  {0}   -->   primary transit signal ranked {1} out of {2} \n#\n'\
                                      .format( targets[i], str( rank_i ), str( nranked ) )
-                    else:
+                    elif ( sigtype=='thermal' )+( sigtype=='reflection' ):
                         header_str = '#  {0}   -->   secondary eclipse signal ranked {1} out of {2} \n#\n'\
                                      .format( targets[i], str( rank_i ), str( nranked ) )
                 header_str += '#  RA (hh mm ss.s) Dec (dd mm ss.s)\n'
@@ -562,9 +558,12 @@ def make_eph():
     # the necessary information:
     q = np.argsort( t.NAME )
     for i in range( t.NAME.size ):
-      eph_file_w.write( '%-12.10s  %.1f  %s  %s  %15.7f  %13.8f  %8.4f \n' % \
-                      ( t.NAME[ q[i] ].replace(' ',''), t.V[ q[i] ], t.RA_STRING[ q[i] ], \
-                        t.DEC_STRING[ q[i] ], t.TT[ q[i] ], t.PER[ q[i] ], t.T14[ q[i] ]*24. ) )
+        # Only write out if target is not a KOI:
+        if t.NAME[q[i]].find( 'KOI' )<0:
+            ostr = '{0:12.10s}  {1:.1f}  {2:s}  {3:s}  {4:15.7f}  {5:13.8f}  {6:8.4f} \n'\
+                .format( t.NAME[ q[i] ].replace(' ',''), t.V[ q[i] ], t.RA_STRING[ q[i] ], \
+                             t.DEC_STRING[ q[i] ], t.TT[ q[i] ], t.PER[ q[i] ], t.T14[ q[i] ]*24. )
+            eph_file_w.write( ostr )
     eph_file_w.close()
     print '\n\nSaved output in %s' % EPH_FILE
 
@@ -852,6 +851,7 @@ def read_eph( eph_file ):
     pers = []
     durs = []
     for line in ifile:
+        print line
         if ( line[0]=='#' ) or ( line[0]=='\n' ) or ( line[0]=='' ):
             continue
         else:
@@ -864,40 +864,64 @@ def read_eph( eph_file ):
                 ttrs    += [ float( line.split()[4] ) ]
                 pers    += [ float( line.split()[5] ) ]
                 durs    += [ float( line.split()[6] ) ]
+            else:
+                pdb.set_trace() # something not right about current entry
     ifile.close()
 
     return targets, vmags, ras, decs, ttrs, pers, durs
 
 
-def eclipse_ranks( ec_signals ):
-
+def eclipse_ranks( ec_signals, targets_all, pers_all, durs_all ):
+    ntargets_all = len( targets_all )
     ec_file = open( ec_signals, 'r' )
     targets_ec = []
     ranks_ec = []
+    pers = []
+    durs = []
     ec_file.seek( 0 )
     for line in ec_file:
         if line[0]=='#':
             continue
         ranks_ec += [ line.split()[0] ]
-        targets_ec += [ line.split()[1] ]
+        target_ec = line.split()[1]
+        targets_ec += [ target_ec ]
+        for i in range( ntargets_all ):
+            if targets_all[i]==target_ec:
+                pers += [ pers_all[i] ]
+                durs += [ durs_all[i] ]
+                break
+            elif i==ntargets_all-1:
+                print target_ec
+                pdb.set_trace()
     ec_file.close()
+    
+    return targets_ec, ranks_ec, pers, durs
 
-    return targets_ec, ranks_ec
 
-
-def transit_ranks( tr_signals ):
-
+def transit_ranks( tr_signals, targets_all, pers_all, durs_all ):
+    ntargets_all = len( targets_all )
     tr_file = open( tr_signals, 'r' )
     targets_tr = []
     ranks_tr = []
+    pers = []
+    durs = []
     tr_file.seek( 0 )
     for line in tr_file:
         if line[0]=='#':
             continue
         ranks_tr += [ line.split()[0] ]
-        targets_tr += [ line.split()[1] ]
+        target_tr = line.split()[1]
+        targets_tr += [ target_tr ]
+        for i in range( ntargets_all ):
+            if targets_all[i]==target_tr:
+                pers += [ pers_all[i] ] 
+                durs += [ durs_all[i] ]
+                break
+            elif i==ntargets_all-1:
+                print target_tr
+                pdb.set_trace()
     tr_file.close()
 
-    return targets_tr, ranks_tr
+    return targets_tr, ranks_tr, pers, durs
 
 

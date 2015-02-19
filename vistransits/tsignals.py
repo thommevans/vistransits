@@ -101,6 +101,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     names = []
     for name in t.NAME:
         names += [ name.replace( ' ', '' ) ]
+    obj_ref = obj_ref.replace( ' ', '' )
     names = np.array( names, dtype=str )
     ii = ( names==obj_ref )
     if ii.max()==False:
@@ -223,6 +224,7 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
     names = []
     for name in t.NAME:
         names += [ name.replace( ' ', '' ) ]
+    obj_ref = obj_ref.replace( ' ', '' )
     names = np.array( names, dtype=str )
     ii = ( names==obj_ref )
     bratio_ref = planck( wav_ref_m, tpeq[ii] )/planck( wav_ref_m, t.TEFF[ii] )
@@ -368,6 +370,7 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     names = []
     for name in t.NAME:
         names += [ name.replace( ' ', '' ) ]
+    obj_ref = obj_ref.replace( ' ', '' )
     names = np.array( names, dtype=str )
     ii = ( names==obj_ref )
     delta_tr_ref = 2*n*( t.R[ii]*RJUP )*Hatm[ii]/( ( t.RSTAR[ii]*RSUN )**2 )
@@ -392,7 +395,7 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
 
     # Open the output file and write the column headings:
     ofile = open( outfile, 'w' )
-    header = make_header_transmission( nplanets, wav_vis, wav_ir, wav_ref, obj_ref, n )
+    header = make_header_transmission( nplanets, wav_vis_m, wav_ir_m, wav_ref_m, obj_ref, n )
     ofile.write( header )
     
     for j in range( nplanets ):
@@ -472,7 +475,7 @@ def planck( wav, temp ):
     return bbflux
 
 
-def make_header_thermal( nplanets, wav, wav_ref, obj_ref ):
+def make_header_thermal( nplanets, wav_m, wav_ref_m, obj_ref ):
     """
     Generates a header in a string format that can be written to
     the top of the eclipses output file.
@@ -511,7 +514,7 @@ def make_header_thermal( nplanets, wav, wav_ref, obj_ref ):
     nchar = max( [ len( colheadingsa ), len( colheadingsb ) ] )
 
     header  = '{0}\n'.format( '#'*nchar )
-    header += '# Eclipse estimates at {0:.2f} micron arranged in order of increasing\n'.format( (1e6)*wav )
+    header += '# Eclipse estimates at {0:.2f} micron arranged in order of increasing\n'.format( (1e6)*wav_m )
     header += '# detectability for {0:d} known transiting exoplanets\n#\n'.format( nplanets )
     header += '# Values for \'K\', \'Tstar\', \'Rstar\', \'Rp\', \'a\' are taken from the literature \n#\n'
     header += '# Other quantities are derived as follows:\n#\n'
@@ -522,7 +525,8 @@ def make_header_thermal( nplanets, wav, wav_ref, obj_ref ):
     header += '#       --->  Fp/Fs = ( P(Tplanet)/P(Tstar) ) * ( Rplanet / Rstar )**2 \n'
     header += '#                 where P is the Planck function\n#\n'
     header += '#  \'S/N\' is the signal-to-noise estimated using the known stellar brightness\n'
-    header += '#    and expressed relative to the S/N expected for {0} at {1:.2f} micron\n'.format( obj_ref, (1e6)*wav_ref )
+    header += '#    and expressed relative to the S/N expected for {0} at {1:.2f} micron\n'\
+              .format( obj_ref, (1e6)*wav_ref_m )
     header += '#       --->  S/N_ref = Fp_ref / sqrt( Fs_ref )\n'
     header += '#       --->  S/N_targ = Fp / sqrt( Fs ) \n'
     header += '#       --->  S/N = S/N_target / S/N_ref\n#\n'
@@ -534,7 +538,7 @@ def make_header_thermal( nplanets, wav, wav_ref, obj_ref ):
     return header
     
 
-def make_header_reflection( nplanets, wav_cuton, wav_cutoff, wav_ref, obj_ref ):
+def make_header_reflection( nplanets, wav_cuton_m, wav_cutoff_m, wav_ref_m, obj_ref ):
     """
     Generates a header in a string format that can be written to
     the top of the eclipses output file.
@@ -578,7 +582,7 @@ def make_header_reflection( nplanets, wav_cuton, wav_cutoff, wav_ref, obj_ref ):
 
     header  = '{0}\n'.format( '#'*nchar )
     header += '# Reflection estimates at {0:.2f}-{1:.2f} micron arranged in order of increasing\n'\
-              .format( (1e6)*wav_cuton, (1e6)*wav_cutoff )
+              .format( (1e6)*wav_cuton_m, (1e6)*wav_cutoff_m )
     header += '# detectability for {0:d} known transiting exoplanets\n#\n'.format( nplanets )
     header += '# Values for \'V\', \'Tstar\', \'Rstar\', \'Rp\', \'a\' are taken from the literature \n#\n'
     header += '# Other quantities are derived as follows:\n#\n'
@@ -593,7 +597,8 @@ def make_header_reflection( nplanets, wav_cuton, wav_cutoff, wav_ref, obj_ref ):
     header += '#  assuming a geometric albedo of 1, i.e. Ag=1, where:\n'
     header += '#       --->  Fp/Fs = Ag*( ( ( Rplanet/Rstar )/( a/Rstar ) )**2 ) \n#\n'
     header += '#  \'S/N\' is the signal-to-noise estimated using the known stellar brightness\n'
-    header += '#    and expressed relative to the S/N expected for {0} at {1:.2f} micron\n'.format( obj_ref, (1e6)*wav_ref )
+    header += '#    and expressed relative to the S/N expected for {0} at {1:.2f} micron\n'\
+              .format( obj_ref, (1e6)*wav_ref_m )
     header += '#       --->  S/N_ref = Fp_ref / sqrt( Fs_ref )\n'
     header += '#       --->  S/N_targ = Fp / sqrt( Fs ) \n'
     header += '#       --->  S/N = S/N_target / S/N_ref\n#\n'
@@ -605,7 +610,7 @@ def make_header_reflection( nplanets, wav_cuton, wav_cutoff, wav_ref, obj_ref ):
     return header
     
 
-def make_header_transmission( nplanets, wav_vis, wav_ir, wav_ref, obj_ref, n ):
+def make_header_transmission( nplanets, wav_vis_m, wav_ir_m, wav_ref_m, obj_ref, n ):
     """
     Generates a header in a string format that can be written to
     the top of the transits output file.
@@ -649,12 +654,12 @@ def make_header_transmission( nplanets, wav_vis, wav_ir, wav_ref, obj_ref, n ):
 
     header  = '{0}\n'.format( '#'*nchar )
     header += '# Transit variation estimates at visible ({0:.2f} micron) and IR  ({01:.2f} micron) wavelengths\n'\
-              .format( (1e6)*wav_vis, (1e6)*wav_ir )
+              .format( (1e6)*wav_vis_m, (1e6)*wav_ir_m )
     header += '# arranged in order of increasing detectability in the visible wavelength for {0:d} known\n'\
               .format( nplanets )
     header += '# transiting exoplanets\n#\n'
     header += '# SNR is given relative to the approximate signal for {0} expected at {1:.2f} microns \n#\n'\
-              .format( obj_ref, (1e6)*wav_ref )
+              .format( obj_ref, (1e6)*wav_ref_m )
     header += '# Values for \'V\', \'K\', \'Rstar\', \'Rp\' are taken from the literature. \n#\n'
     header += '# Other quantities are derived as follows:\n#\n'
     header += '#  \'Tpeq\' is the equilibrium effective temperature of the planet assuming \n'
@@ -671,7 +676,7 @@ def make_header_transmission( nplanets, wav_vis, wav_ir, wav_ref, obj_ref, n ):
     header += '#       --->   Delta = 2 * n * Rplanet * H / ( Rstar**2 ) \n#\n'.format( n )
     header += '#  \'S/N\' is the signal-to-noise of the transmission signal estimated using \n'
     header += '#    the known stellar brightness and expressed relative to the S/N expected \n'
-    header += '#    for {0} at {1:.2f} micron\n'.format( obj_ref, (1e6)*wav_ref )
+    header += '#    for {0} at {1:.2f} micron\n'.format( obj_ref, (1e6)*wav_ref_m )
     header += '#       --->  S/N_ref = Delta_ref / sqrt( F_ref )  \n'
     header += '#       --->  S/N_targ = Delta_targ / sqrt( F_targ )  \n'
     header += '#       --->  S/N = S/N_target / S/N_ref\n#\n'
