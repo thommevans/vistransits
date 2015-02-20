@@ -46,7 +46,15 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
 
     # Get table data for planets that we have enough information on:
     t = filter_table( sigtype='reflection', download_latest=download_latest )
-    nplanets = len( t.NAME )
+    nplanets_all = len( t.NAME )
+
+    # Exclude unconfirmed planets:
+    ixsc = []
+    for i in range( nplanets_all ):
+        if t.NAME[i].find( 'KOI' )<0:
+            ixsc += [ i ]
+    ixsc = np.array( ixsc )
+    nplanets = len( t.NAME[ixsc] )
 
     # Calculate the equilibrium temperatures for all planets on list:
     tpeq = Teq( t )
@@ -134,7 +142,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     snr_norm = snr_unnorm / snr_ref
 
     # Rearrange the targets in order of the most promising:
-    s = np.argsort( snr_norm )
+    s = np.argsort( snr_norm[ixsc] )
     s = s[::-1]
 
     # Open the output file and write the column headings:
@@ -145,10 +153,11 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     # Write the output rows to file and save:
     for j in range( nplanets ):
         i = s[j]
-        outstr = make_outstr_reflection( j+1, t.NAME[i], t.RA[i], t.DEC[i], t.V[i], \
-                                         t.TEFF[i], t.RSTAR[i], t.R[i], t.A[i], tpeq[i], \
-                                         RpRs[i], fratio_total[i], snr_norm[i], \
-                                         thermal_frac[i] )
+        outstr = make_outstr_reflection( j+1, t.NAME[ixsc][i], t.RA[ixsc][i], t.DEC[ixsc][i], \
+                                         t.V[ixsc][i], t.TEFF[ixsc][i], t.RSTAR[ixsc][i], \
+                                         t.R[ixsc][i], t.A[ixsc][i], tpeq[ixsc][i], \
+                                         RpRs[ixsc][i], fratio_total[ixsc][i], \
+                                         snr_norm[ixsc][i], thermal_frac[ixsc][i] )
         ofile.write( outstr )
     ofile.close()
     print 'Saved output in {0}'.format( outfile )
@@ -178,7 +187,15 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
 
     # Get table data for planets that we have enough information on:
     t = filter_table( sigtype='thermal', download_latest=download_latest )
-    nplanets = len( t.NAME )
+    nplanets_all = len( t.NAME )
+
+    # Exclude unconfirmed planets:
+    ixsc = []
+    for i in range( nplanets_all ):
+        if t.NAME[i].find( 'KOI' )<0:
+            ixsc += [ i ]
+    ixsc = np.array( ixsc )
+    nplanets = len( t.NAME[ixsc] )
 
     # Calculate the equilibrium temperatures for all planets on list:
     tpeq = Teq( t )
@@ -243,7 +260,7 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
     snr_norm = snr_unnorm/snr_ref
 
     # Rearrange the targets in order of the most promising:
-    s = np.argsort( snr_norm )
+    s = np.argsort( snr_norm[ixsc] )
     s = s[::-1]
 
     # Open the output file and write the column headings:
@@ -254,9 +271,10 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
     # Write the output rows to file and save:
     for j in range( nplanets ):
         i = s[j]
-        outstr = make_outstr_thermal( j+1, t.NAME[i], t.RA[i], t.DEC[i], t.KS[i], \
-                                      t.TEFF[i], t.RSTAR[i], t.R[i], t.A[i], tpeq[i], \
-                                      fratio[i], snr_norm[i] )
+        outstr = make_outstr_thermal( j+1, t.NAME[ixsc][i], t.RA[ixsc][i], t.DEC[ixsc][i], \
+                                      t.KS[ixsc][i], t.TEFF[ixsc][i], t.RSTAR[ixsc][i], \
+                                      t.R[ixsc][i], t.A[ixsc][i], tpeq[ixsc][i], \
+                                      fratio[ixsc][i], snr_norm[ixsc][i] )
         ofile.write( outstr )
     ofile.close()
     print 'Saved output in {0}'.format( outfile )
@@ -298,7 +316,15 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     # Make we exclude table rows that do not contain
     # all the necessary properties:
     t = filter_table( sigtype='transmission', download_latest=download_latest )
-    nplanets = len( t.NAME )
+    nplanets_all = len( t.NAME )
+
+    # Exclude unconfirmed planets:
+    ixsc = []
+    for i in range( nplanets_all ):
+        if t.NAME[i].find( 'KOI' )<0:
+            ixsc += [ i ]
+    ixsc = np.array( ixsc )
+    nplanets = len( t.NAME[ixsc] )
 
     # First check to make sure we have both a V and Ks
     # magnitude for the reference star:
@@ -306,7 +332,6 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     if ( np.isfinite( t.KS[ix] )==False ) or ( np.isfinite( t.V[ix] )==False ):
         print '\n\nPlease select a different reference star for which we have both a V and Ks magnitude\n\n'
         return None
-
 
     # Calculate the approximate planetary equilibrium temperature:
     tpeq = Teq( t )
@@ -389,8 +414,8 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     snr_norm_vis = snr_unnorm_vis/snr_ref_vis
     snr_norm_ir = snr_unnorm_ir/snr_ref_ir
 
-    # Rearrange the targets in order of the most promising:
-    s = np.argsort( snr_norm_vis )
+    # Rearrange the confirmed targets in order of the most promising:
+    s = np.argsort( snr_norm_vis[ixsc] )
     s = s[::-1]
 
     # Open the output file and write the column headings:
@@ -400,18 +425,18 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     
     for j in range( nplanets ):
         i = s[j]
-        if np.isfinite( t.V[i] ):
-            v = '{0:.1f}'.format( t.V[i] )
+        if np.isfinite( t.V[ixsc][i] ):
+            v = '{0:.1f}'.format( t.V[ixsc][i] )
         else:
             v = '-'
-        if np.isfinite( t.KS[i] ):
-            ks = '{0:.1f}'.format( t.KS[i] )
+        if np.isfinite( t.KS[ixsc][i] ):
+            ks = '{0:.1f}'.format( t.KS[ixsc][i] )
         else:
             ks = '-'
-        outstr = make_outstr_transmission( j+1, t.NAME[i], t.RA[i], t.DEC[i], v, ks, \
-                                           t.RSTAR[i], t.R[i], tpeq[i], \
-                                           Hatm[i], depth_tr[i], delta_tr[i], \
-                                           snr_norm_vis[i], snr_norm_ir[i] )
+        outstr = make_outstr_transmission( j+1, t.NAME[ixsc][i], t.RA[ixsc][i], t.DEC[ixsc][i], \
+                                           v, ks, t.RSTAR[ixsc][i], t.R[ixsc][i], tpeq[ixsc][i], \
+                                           Hatm[ixsc][i], depth_tr[ixsc][i], delta_tr[ixsc][i], \
+                                           snr_norm_vis[ixsc][i], snr_norm_ir[ixsc][i] )
         ofile.write( outstr )
     ofile.close()
     print 'Saved output in {0}'.format( outfile )
@@ -438,7 +463,7 @@ def filter_table( sigtype=None, download_latest=True ):
         t = t.where( np.isfinite( t.KS ) + np.isfinite( t.V ) ) # stellar Ks and/or V magnitude
         try:
             t = t.where( ( np.isfinite( t.MSINI ) * ( t.MSINI>0 ) + \
-                           ( np.isfinite( t.MASS ) * ( t.MASS>0 ) ) ) ) # MSINI and MASS available
+                         ( np.isfinite( t.MASS ) * ( t.MASS>0 ) ) ) ) # MSINI and MASS available
         except:
             t = t.where( ( np.isfinite( t.MSINI ) * ( t.MSINI>0 ) ) ) # only MSINI available
     elif sigtype=='reflection':

@@ -872,6 +872,18 @@ def read_eph( eph_file ):
 
 
 def eclipse_ranks( ec_signals, targets_all, pers_all, durs_all ):
+    """
+    **ec_signals - ASCII file containing a ranked list of the signals, with
+    columns corresponding to:
+     Rank, Name, RA, Dec, Kmag, Tstar, Rstar, Rp, a, Tpeq, Fp/Fs, S/N
+    
+    **targets_all - List of strings containing the database names for each
+    planet considered to be a suitable target
+    **pers_all - List containing the orbital periods for the corresponding
+    targets listed in tagets_all
+    **durs_all - List containing the eclipse duractions for the corresponding
+    targets listed in tagets_all
+    """
     ntargets_all = len( targets_all )
     ec_file = open( ec_signals, 'r' )
     targets_ec = []
