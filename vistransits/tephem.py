@@ -31,7 +31,7 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
           the observatories() routine ( eg. 'LaPalma', 'Paranal', 'MaunaKea' ).
       **date_start - String in the format 'YYYY/MM/DD' giving the start date.
       **date_end - String in the format 'YYYY/MM/DD' giving the end date.
-      **sigtype - 'transits' or 'eclipses'
+      **sigtype - 'transits', 'reflection' or 'thermal'
       **ofilename_byplanet - Name of first output file that gets generated, divided
           between the different planets.
       **ofilename_chronolog - Name of the second output file that gets generated, with
@@ -66,11 +66,11 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
 
     # Read in the rankings for transit and eclipse signals:
     if sigtype=='transits':
-        targets, ranks, pers, durs = eclipse_ranks( thermal_signals, targets_all, pers_all, durs_all )
+        targets, ranks, pers, durs = transit_ranks( tr_signals, targets_all, pers_all, durs_all )
     elif sigtype=='reflection':
         targets, ranks, pers, durs = eclipse_ranks( reflect_signals, targets_all, pers_all, durs_all )
     elif sigtype=='thermal':
-        targets, ranks, pers, durs = transit_ranks( tr_signals, targets_all, pers_all, durs_all )    
+        targets, ranks, pers, durs = eclipse_ranks( thermal_signals, targets_all, pers_all, durs_all )    
     ntargets = len( targets )
     
     # Create the databases that will be used by pyephem for calculating
@@ -91,6 +91,9 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
         elif sigtype=='thermal':
             ofilename_byplanet = '{0}_thermal_byplanet.txt'.format( observatory )
             ofilename_chronolog = '{0}_thermal_chronolog.txt'.format( observatory )            
+        elif sigtype=='reflection':
+            ofilename_byplanet = '{0}_reflection_byplanet.txt'.format( observatory )
+            ofilename_chronolog = '{0}_reflection_chronolog.txt'.format( observatory )            
         else:
             pdb.set_trace() #this shouldn't happen
 
@@ -117,12 +120,12 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
         sigtype_upper_singular = 'Reflection'
 
 
-    ofile_bp.write( '# Visible primary {0}s from {1} between {2} and {3}, arranged by planet\n#\n'\
+    ofile_bp.write( '# Visible {0} targets from {1} between {2} and {3}, arranged by planet\n#\n'\
                  .format( sigtype_lower_singular, observatory, date_start, date_end ) )
-    ofile_ch.write( '# Visible primary {0}s from {1} between {2} and {3}, arranged in chronological order\n#\n'\
+    ofile_ch.write( '# Visible {0} targets from {1} between {2} and {3}, arranged in chronological order\n#\n'\
                  .format( sigtype_lower_singular, observatory, date_start, date_end ) )
     if max_rank!=None:
-        header_str = '# Only considered the top {0} ranked signals and of these only those with {1}s\n'\
+        header_str = '# Only considered the top ranked {0} signals and of these only those with {1}s\n'\
                      .format( max_rank, sigtype_lower_singular )
         header_str += '# where the mid-time occurs at a zenith angle <{0}deg\n#\n'\
                       .format( zenith_max )
@@ -140,20 +143,20 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     header_str += '#   2. Dawn/Dusk = [ {0}deg to {1}deg ]\n'.format( sun_alt_twil, sun_alt_max )
     header_str += '#   3. Twilight = [ {0}deg to {1}deg ]\n'.format( sun_alt_dark, sun_alt_twil )
     header_str += '#   4. Dark < {0}deg\n#\n'.format( sun_alt_dark )
-    header_str +=  '# {0}s are described by a string with format {{type}}-{{details}}, where:\n#\n'\
+    header_str +=  '# {0} signals are described by a string with format {{type}}-{{details}}, where:\n#\n'\
                   .format( sigtype_upper_singular )
     header_str += '#   {{type}} refers to whether or not we get all of the {0} with the sun below its\n'.format( sigtype_lower_singular )
     header_str += '#   maximum acceptable value:\n'
     header_str += '#     - \'full\' if the sun elevation is less than the maximum acceptable value for the\n'
-    header_str += '#       entire duration of the {0}\n'.format( sigtype_lower_singular )
+    header_str += '#       entire duration of the {0} signal\n'.format( sigtype_lower_singular )
     header_str += '#     - \'partial\' if the sun elevation is less than the maximum acceptable value at\n'
-    header_str += '#       the {0} mid-time, but not for the entire duration of the {0}\n#\n'\
+    header_str += '#       the {0} mid-time, but not for the entire duration of the {0} signal\n#\n'\
                   .format( sigtype_lower_singular )
     if oot_deltdur==0:
         header_str += '#   {details} can have the following values:\n'
     else:
         header_str += '#   {{details}} refer to the full span of the observations including the {0:.2f} transit\n'.format( oot_deltdur )
-        header_str += '#   durations before and after the {0} itself for sampling the baseline flux:\n'.format( sigtype_lower_singular )
+        header_str += '#   durations before and after the {0} signal itself for sampling the baseline flux:\n'.format( sigtype_lower_singular )
     header_str += '#     - \'all_in_darktime\' if the sun elevation is within the dark range for the entire\n'
     header_str += '#     duration of the observations\n'
     header_str += '#     - \'dark_to_twilight\' if the sun elevation is within the dark range at the start\n'
@@ -166,14 +169,14 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     header_str += '#       the observations\n'
     if oot_deltdur>0:
         header_str += '#     - \'partial_oot\' if the sun elevation is above the maximum acceptable value at some\n'
-        header_str += '#       time during either the pre- or post-{0} baseline flux observations\n'.format( sigtype_lower_singular )
+        header_str += '#       time during either the pre- or post-{0} signal baseline flux observations\n'.format( sigtype_lower_singular )
     header_str += '#     - \'miss_ingress\' if the sun elevation is above the maximum acceptable value at\n'
     header_str += '#       ingress but below this value at egress\n'
     header_str += '#     - \'miss_ingress\' if the sun elevation is below the maximum acceptable value at\n'
     header_str += '#       ingress but above this value at egress\n'
     header_str += '#     - \'only_middle\' if the sun elevation is above the maximum acceptable value at\n'
     header_str += '#       value at both ingress and egress, but descends below this value at some point\n'
-    header_str += '#       during the {0}\n#\n'.format( sigtype_lower_singular )
+    header_str += '#       during the {0} signal\n#\n'.format( sigtype_lower_singular )
     ofile_bp.write( header_str )
     ofile_ch.write( header_str )
 
@@ -558,14 +561,12 @@ def make_eph():
     # the necessary information:
     q = np.argsort( t.NAME )
     for i in range( t.NAME.size ):
-        # Only write out if target is not a KOI:
-        if t.NAME[q[i]].find( 'KOI' )<0:
-            ostr = '{0:12.10s}  {1:.1f}  {2:s}  {3:s}  {4:15.7f}  {5:13.8f}  {6:8.4f} \n'\
-                .format( t.NAME[ q[i] ].replace(' ',''), t.V[ q[i] ], t.RA_STRING[ q[i] ], \
-                             t.DEC_STRING[ q[i] ], t.TT[ q[i] ], t.PER[ q[i] ], t.T14[ q[i] ]*24. )
-            eph_file_w.write( ostr )
+        ostr = '{0:15s}  {1:.1f}  {2:s}  {3:s}  {4:15.7f}  {5:13.8f}  {6:8.4f} \n'\
+               .format( t.NAME[ q[i] ].replace(' ',''), t.V[ q[i] ], t.RA_STRING[ q[i] ], \
+                       t.DEC_STRING[ q[i] ], t.TT[ q[i] ], t.PER[ q[i] ], t.T14[ q[i] ]*24. )
+        eph_file_w.write( ostr )
     eph_file_w.close()
-    print '\n\nSaved output in %s' % EPH_FILE
+    print '\n\nSaved output in {0}'.format( EPH_FILE )
 
     return None
 
@@ -851,7 +852,6 @@ def read_eph( eph_file ):
     pers = []
     durs = []
     for line in ifile:
-        print line
         if ( line[0]=='#' ) or ( line[0]=='\n' ) or ( line[0]=='' ):
             continue
         else:

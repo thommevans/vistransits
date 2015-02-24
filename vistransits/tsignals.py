@@ -806,7 +806,7 @@ def make_outstr_thermal( rank, name, ra, dec, kmag, tstar, rstar, rp, a, tpeq, f
     rp_str = '{0:.1f}'.format( rp ).center( 6 )
     a_str = '{0:.3f}'.format( a ).center( 5 )
     tpeq_str = '{0:4d}'.format( int( tpeq ) ).center( 5 )
-    fratio_str = '{0:.2f}'.format( (1e4)*fratio ).rjust( 6 )
+    fratio_str = '{0:.4f}'.format( (1e4)*fratio ).rjust( 6 )
     snr_str = '{0:.2f}'.format( snr_norm ).rjust( 6 )
     outstr = '  {0}{1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11}\n'\
              .format( rank_str, \
