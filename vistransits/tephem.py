@@ -61,28 +61,43 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     zenith_max = 90 - target_elev_min
 
     # Read in the basic target information for all transiting exoplanets:
-    targets_all, vmags, ras, decs, ttrs, pers_all, durs_all = read_eph( EPH_FILE )
+    targets_all, vmags_all, ras_all, decs_all, ttrs_all, pers_all, durs_all = read_eph( EPH_FILE )
     ntargets_all = len( targets_all )
 
     # Read in the rankings for transit and eclipse signals:
     if sigtype=='transits':
-        targets, ranks, pers, durs = transit_ranks( tr_signals, targets_all, pers_all, durs_all )
+        targets, ranks, ttrs, pers, durs = transit_ranks( tr_signals, targets_all, \
+                                                          ttrs_all, pers_all, durs_all )
     elif sigtype=='reflection':
-        targets, ranks, pers, durs = eclipse_ranks( reflect_signals, targets_all, pers_all, durs_all )
+        targets, ranks, ttrs, pers, durs = eclipse_ranks( reflect_signals, targets_all, \
+                                                          ttrs_all, pers_all, durs_all )
     elif sigtype=='thermal':
-        targets, ranks, pers, durs = eclipse_ranks( thermal_signals, targets_all, pers_all, durs_all )    
+        targets, ranks, ttrs, pers, durs = eclipse_ranks( thermal_signals, targets_all, \
+                                                          ttrs_all, pers_all, durs_all )
     ntargets = len( targets )
-    
+
     # Create the databases that will be used by pyephem for calculating
     # ephemerides for each object:
     dbs = []
-    for i in range( ntargets_all ):
-        db_str = '{targ},f|S,{ra},{dec},{vmag}'.format( targ=targets_all[i], \
-                                                        ra=ras[i], \
-                                                        dec=decs[i], \
-                                                        vmag=vmags[i] )
-        dbs += [ db_str ]
-
+    ras = []
+    decs = []
+    vmags = []
+    for i in range( ntargets ):
+        # Ensure that the target is a signal of interest:
+        for j in range( ntargets_all ):
+            if targets[i]==targets_all[j]:
+                db_str = '{targ},f|S,{ra},{dec},{vmag}'.format( targ=targets[i], \
+                                                                ra=ras_all[j], \
+                                                                dec=decs_all[j], \
+                                                                vmag=vmags_all[j] )
+                ras += [ ras_all[j] ]
+                decs += [ decs_all[j] ]
+                vmags += [ vmags_all[j] ]
+                dbs += [ db_str ]
+                break
+            elif ( i==ntargets-1 )*( j==ntargets_all-1 ):
+                pdb.set_trace() # not matched to any targets in database
+                
     # Open the output file and write a header:
     if ofilename_byplanet=='default':
         if sigtype=='transits':
@@ -133,7 +148,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
         header_str = '# Considered all published transiting planets but output only printed where the\n'
         header_str += '# {0} mid-time occurs at a zenith angle <{0}deg\n#\n'.format( zenith_max )
     if oot_deltdur>0:
-        header_str += '# Accounts for {0:.2f} transit durations before and after the transit to sample\n'.format( oot_deltdur )
+        header_str += '# Accounts for {0:.2f} transit durations before and after the transit to sample\n'\
+                      .format( oot_deltdur )
         header_str += '# the out-of-transit baseline flux level\n#\n'
     else:
         header_str += '# No allowance made for time required to sample the out-of-transit baseline flux\n'
@@ -145,7 +161,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     header_str += '#   4. Dark < {0}deg\n#\n'.format( sun_alt_dark )
     header_str +=  '# {0} signals are described by a string with format {{type}}-{{details}}, where:\n#\n'\
                   .format( sigtype_upper_singular )
-    header_str += '#   {{type}} refers to whether or not we get all of the {0} with the sun below its\n'.format( sigtype_lower_singular )
+    header_str += '#   {{type}} refers to whether or not we get all of the {0} with the sun below its\n'\
+                  .format( sigtype_lower_singular )
     header_str += '#   maximum acceptable value:\n'
     header_str += '#     - \'full\' if the sun elevation is less than the maximum acceptable value for the\n'
     header_str += '#       entire duration of the {0} signal\n'.format( sigtype_lower_singular )
@@ -155,8 +172,10 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     if oot_deltdur==0:
         header_str += '#   {details} can have the following values:\n'
     else:
-        header_str += '#   {{details}} refer to the full span of the observations including the {0:.2f} transit\n'.format( oot_deltdur )
-        header_str += '#   durations before and after the {0} signal itself for sampling the baseline flux:\n'.format( sigtype_lower_singular )
+        header_str += '#   {{details}} refer to the full span of the observations including the {0:.2f} transit\n'\
+                      .format( oot_deltdur )
+        header_str += '#   durations before and after the {0} signal itself for sampling the baseline flux:\n'\
+                      .format( sigtype_lower_singular )
     header_str += '#     - \'all_in_darktime\' if the sun elevation is within the dark range for the entire\n'
     header_str += '#     duration of the observations\n'
     header_str += '#     - \'dark_to_twilight\' if the sun elevation is within the dark range at the start\n'
@@ -169,7 +188,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     header_str += '#       the observations\n'
     if oot_deltdur>0:
         header_str += '#     - \'partial_oot\' if the sun elevation is above the maximum acceptable value at some\n'
-        header_str += '#       time during either the pre- or post-{0} signal baseline flux observations\n'.format( sigtype_lower_singular )
+        header_str += '#       time during either the pre- or post-{0} signal baseline flux observations\n'\
+                      .format( sigtype_lower_singular )
     header_str += '#     - \'miss_ingress\' if the sun elevation is above the maximum acceptable value at\n'
     header_str += '#       ingress but below this value at egress\n'
     header_str += '#     - \'miss_ingress\' if the sun elevation is below the maximum acceptable value at\n'
@@ -207,10 +227,12 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
               .format( i+1, ntargets, targets[i] )
         first_i = True
         per_i = pers[i]
-        dur_i = durs[i] / 24.
+        dur_i = durs[i]/24.
         
         # Initiate the ephem object for the target:
         target_i = ephem.readdb( dbs[i] )
+        if target_i.name!=targets[i]:
+            pdb.set_trace()
 
         # Check to see if the current target's signal has been ranked,
         # and if it has, make sure that it was ranked highly enough,
@@ -291,10 +313,11 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
             moon.compute( obs )
             moon_alt_midtime = np.rad2deg( float( moon.alt ) )
             # If the Sun is above the maximum elevation limit, bump up to
-            # the next transit and go back to the top of the loop:
+            # the next transit and go back to the top of the while loop:
             if sun_alt_midtime>sun_alt_max:
                 ttr_i += per_i
                 continue
+
             # Get the Moon phase as a percentage of the illuminated face:
             moonphase = '{0:d}'.format( int( np.round( moon.phase ) ) )
             # Get the target-Moon angular separation:
@@ -422,7 +445,7 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
                     pdb.set_trace() #if this happens, need to work out what the Case should be
                     print 'backstop'
                     pdb.set_trace()
-                    
+
             # The following variations describe cases where we do not get the
             # full transit plus out-of-transit baseline:
 
@@ -536,7 +559,7 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     return ofilename_byplanet, ofilename_chronolog
 
 
-def make_eph():
+def make_eph( exclude_unconfirmed=True ):
     """
     Generates the ephemerides file for all of the transiting exoplanets in
     the exoplanets.org database.
@@ -561,6 +584,12 @@ def make_eph():
     # the necessary information:
     q = np.argsort( t.NAME )
     for i in range( t.NAME.size ):
+        if t.NAME[ q[i] ].find( 'KOI' )>=0:
+            confirmed = False
+        else:
+            confirmed = True
+        if ( confirmed==False )*( exclude_unconfirmed==True ):
+            continue
         ostr = '{0:15s}  {1:.1f}  {2:s}  {3:s}  {4:15.7f}  {5:13.8f}  {6:8.4f} \n'\
                .format( t.NAME[ q[i] ].replace(' ',''), t.V[ q[i] ], t.RA_STRING[ q[i] ], \
                        t.DEC_STRING[ q[i] ], t.TT[ q[i] ], t.PER[ q[i] ], t.T14[ q[i] ]*24. )
@@ -871,7 +900,7 @@ def read_eph( eph_file ):
     return targets, vmags, ras, decs, ttrs, pers, durs
 
 
-def eclipse_ranks( ec_signals, targets_all, pers_all, durs_all ):
+def eclipse_ranks( ec_signals, targets_all, ttrs_all, pers_all, durs_all ):
     """
     **ec_signals - ASCII file containing a ranked list of the signals, with
     columns corresponding to:
@@ -888,6 +917,7 @@ def eclipse_ranks( ec_signals, targets_all, pers_all, durs_all ):
     ec_file = open( ec_signals, 'r' )
     targets_ec = []
     ranks_ec = []
+    ttrs = []
     pers = []
     durs = []
     ec_file.seek( 0 )
@@ -899,6 +929,7 @@ def eclipse_ranks( ec_signals, targets_all, pers_all, durs_all ):
         targets_ec += [ target_ec ]
         for i in range( ntargets_all ):
             if targets_all[i]==target_ec:
+                ttrs += [ ttrs_all[i] ]
                 pers += [ pers_all[i] ]
                 durs += [ durs_all[i] ]
                 break
@@ -907,14 +938,15 @@ def eclipse_ranks( ec_signals, targets_all, pers_all, durs_all ):
                 pdb.set_trace()
     ec_file.close()
     
-    return targets_ec, ranks_ec, pers, durs
+    return targets_ec, ranks_ec, ttrs, pers, durs
 
 
-def transit_ranks( tr_signals, targets_all, pers_all, durs_all ):
+def transit_ranks( tr_signals, targets_all, ttrs_all, pers_all, durs_all ):
     ntargets_all = len( targets_all )
     tr_file = open( tr_signals, 'r' )
     targets_tr = []
     ranks_tr = []
+    ttrs = []
     pers = []
     durs = []
     tr_file.seek( 0 )
@@ -926,6 +958,7 @@ def transit_ranks( tr_signals, targets_all, pers_all, durs_all ):
         targets_tr += [ target_tr ]
         for i in range( ntargets_all ):
             if targets_all[i]==target_tr:
+                ttrs += [ ttrs_all[i] ] 
                 pers += [ pers_all[i] ] 
                 durs += [ durs_all[i] ]
                 break
@@ -934,6 +967,6 @@ def transit_ranks( tr_signals, targets_all, pers_all, durs_all ):
                 pdb.set_trace()
     tr_file.close()
 
-    return targets_tr, ranks_tr, pers, durs
+    return targets_tr, ranks_tr, ttrs, pers, durs
 
 
