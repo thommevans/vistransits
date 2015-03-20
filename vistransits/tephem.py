@@ -74,6 +74,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     elif sigtype=='thermal':
         targets, ranks, ttrs, pers, durs = eclipse_ranks( thermal_signals, targets_all, \
                                                           ttrs_all, pers_all, durs_all )
+    else:
+        pdb.set_trace() # sigtype not recognised
     ntargets = len( targets )
 
     # Create the databases that will be used by pyephem for calculating
