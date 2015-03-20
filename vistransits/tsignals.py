@@ -19,7 +19,8 @@ TR_TABLE = 'exoplanets_transiting.fits' # fits file for known exoplanets that tr
 
 
 def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b', \
-                outfile='signals_reflection.txt', download_latest=True ):
+                outfile='signals_reflection.txt', download_latest=True, \
+                include_thermal_contribution=False ):
     """
     Generates a table of properties relevant to eclipse measurements at a specified
     wavelength for all known transiting exoplanets, assuming reflected starlight only.
@@ -74,7 +75,10 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
         Bp[i] = scipy.integrate.quad( planck, wav_meas_m_cuton, wav_meas_m_cutoff, args=( tpeq[i] ) )[0]
         Bs[i] = scipy.integrate.quad( planck, wav_meas_m_cuton, wav_meas_m_cutoff, args=( t.TEFF[i] ) )[0]
     fratio_thermal = ( RpRs**2. )*( Bp/Bs )
-    fratio_total = fratio_reflection + fratio_thermal
+    if include_thermal_contribution==True:
+        fratio_total = fratio_reflection + fratio_thermal
+    else:
+        fratio_total = fratio_reflection
     thermal_frac = fratio_thermal/fratio_reflection
     # NOTE: Be aware that thermal_frac is actually unphysical. It assumes
     # zero Bond albedo to calculate the temperature, but then the reflection
@@ -613,14 +617,18 @@ def make_header_reflection( nplanets, wav_cuton_m, wav_cutoff_m, wav_ref_m, obj_
     header += '# Other quantities are derived as follows:\n#\n'
     header += '#  \'Tpeq\' is the equilibrium effective temperature of the planet assuming \n'
     header += '#    absorption of all incident star light and uniform redistribution\n'
-    header += '#       --->  Tpeq = np.sqrt( Rstar/2./a )*Tstar \n#\n'
+    header += '#       --->  Tpeq = np.sqrt( Rstar/2./a )*Tstar \n'
     header += '#  \'Fp/Fs\' is the ratio of the reflected+thermal planetary flux to the total stellar\n'
-    header += '#  flux assuming a geometric albedo of 1, i.e. Ag=1, where:\n'
-    header += '#       --->  Fp/Fs = Ag*( ( ( Rplanet/Rstar )/( a/Rstar ) )**2 ) \n#\n'
+    header += '#  flux assuming a geometric albedo of 1, i.e. Ag=1, across all wavelengths for the \n'
+    header += '#  reflected component, where:\n'
+    header += '#       --->  Fp/Fs = Ag*( ( ( Rplanet/Rstar )/( a/Rstar ) )**2 ) \n'
+    header += '#  and the thermal contribution is calculated by assuming that the planet radiates as a\n'
+    header += '#  blackbody with temperature Tpeq, i.e. assuming Bond albedo of 0 and uniform heat distribution\n#\n'
     header += '#  \'Thermal\' is the fraction of the planetary flux due to thermal emission rather than\n'
-    header += '#  reflected light from the planetary atmosphere\n#\n'
-    header += '#  assuming a geometric albedo of 1, i.e. Ag=1, where:\n'
-    header += '#       --->  Fp/Fs = Ag*( ( ( Rplanet/Rstar )/( a/Rstar ) )**2 ) \n#\n'
+    header += '#  reflected light from the planetary atmosphere, i.e. total = thermal + reflected\n#\n'
+    header += '#  Note that strictly speaking the above is unphysical, because the equilibrium temperature\n'
+    header += '#  is calculated assuming zero albedo, but the reflection is calculated assuming\n'
+    header += '#  a geometric albedo that is unity across all wavelengths.\n#\n'
     header += '#  \'S/N\' is the signal-to-noise estimated using the known stellar brightness\n'
     header += '#    and expressed relative to the S/N expected for {0} at {1:.2f} micron\n'\
               .format( obj_ref, (1e6)*wav_ref_m )
