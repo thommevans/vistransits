@@ -4,6 +4,8 @@ import ephem
 import numpy as np
 import scipy.integrate
 import tutilities
+import matplotlib
+import matplotlib.pyplot as plt
 
 G = 6.67428e-11 # gravitational constant in m^3/kg^-1/s^-2
 HPLANCK = 6.62607e-34 # planck's constant in J*s
@@ -12,10 +14,331 @@ KB = 1.3806488e-23 # boltzmann constant in J/K
 RGAS = 8.314 # gas constant in J/mol/K
 RSUN = 6.9551e8 # solar radius in m
 RJUP = 7.1492e7 # jupiter radius in m
+REARTH = 6.371e6 # earth radius in m
 MJUP = 1.89852e27 # jupiter mass in kg
 AU2M = 1.49598e11 # au to metres conversion factor
 MUJUP = 2.22e-3 # jupiter atmosphere mean molecular weight in kg/mole
 TR_TABLE = 'exoplanets_transiting.fits' # fits file for known exoplanets that transit
+
+
+def transmission_plots( download_latest=True, label_top_ranked=0, outfile='', \
+                        ref_wav_um=0.6, output_format='pdf' ):
+    """
+    Aim = To produce the following plots:
+    1. period versus radius, with marker size indicating transmission amplitude (i.e. change in 
+       transit depth corresponding to one atmospheric scale height) and colour indicating 
+       equilibrium temperature.
+    2. transmission amplitude versus host star magnitude with marker size indicating planet
+       mass and colour indicating equilibrium temperature.
+    """
+
+    plt.ioff()
+    matplotlib.rc( 'text', usetex=True )
+
+    sigtype = 'transmission'
+
+    figw = 14
+    figh = 10
+
+    fig1 = plt.figure( figsize=[ figw, figh ] )
+    fig2 = plt.figure( figsize=[ figw, figh ] )
+    fig3 = plt.figure( figsize=[ figw, figh ] )
+
+    hbuff = 0.05
+    vbuff = 0.05
+    xlow = 2.*hbuff
+    ylow = 2.*vbuff
+    axw = 1-5*hbuff
+    axh = 1-2.5*vbuff
+    ax1 = fig1.add_axes( [ xlow, ylow, axw, axh ], xscale='log', yscale='linear' )
+    ax2 = fig2.add_axes( [ xlow, ylow, axw, axh ], xscale='log', yscale='linear' )
+    ax3 = fig3.add_axes( [ xlow, ylow, axw, axh ], xscale='linear', yscale='linear' )
+
+    ax1.xaxis.set_major_formatter( matplotlib.ticker.ScalarFormatter() )
+    ax2.xaxis.set_major_formatter( matplotlib.ticker.ScalarFormatter() )
+    ax3.xaxis.set_major_formatter( matplotlib.ticker.ScalarFormatter() )
+
+    z = get_planet_properties(  sigtype=sigtype, download_latest=download_latest, exclude_kois=False )
+    names = z['names']
+    ras = z['ras']
+    decs = z['decs']
+    vmags = z['vmags']
+    ksmags = z['ksmags']
+    rstars = z['rstars']
+    teffs = z['teffs']
+    rplanets = z['rplanets']
+    mplanets = z['mplanets']
+    per = z['periods']
+    tpeqs = z['tpeqs']
+    Hatms = z['Hatms']
+    nplanets_all = len( names )
+
+    ixsc = []
+    per_other = []
+    rplanets_other = []
+    for i in range( nplanets_all ):
+        if ( np.isfinite( vmags[i] ) )*( np.isfinite( mplanets[i] ) )*\
+           ( np.isfinite( Hatms[i] ) )*( np.isfinite( tpeqs[i] ) )==True:
+            ixsc += [ i ]
+        else:
+            try:
+                per_other += [ per[i] ]
+                rplanets_other += [ rplanets[i] ]
+            except:
+                pass
+    per_other = np.array( per_other )
+    rplanets_other = np.array( rplanets_other )
+
+    ixsc = np.array( ixsc )  
+    #ixs = ( np.isfinite( vmags[ixsc] ) )*( np.isfinite( mplanets[ixsc] ) )*( np.isfinite( Hatms[ixsc] ) )
+    names = z['names'][ixsc]#[ixs]
+    ras = z['ras'][ixsc]#[ixs]
+    decs = z['decs'][ixsc]#[ixs]
+    vmags = z['vmags'][ixsc]#[ixs]
+    ksmags = z['ksmags'][ixsc]#[ixs]
+    rstars = z['rstars'][ixsc]#[ixs]
+    teffs = z['teffs'][ixsc]#[ixs]
+    rplanets = z['rplanets'][ixsc]#[ixs]
+    mplanets = z['mplanets'][ixsc]#[ixs]
+    per = z['periods'][ixsc]#[ixs]
+    tpeqs = z['tpeqs'][ixsc]#[ixs]
+    Hatms = z['Hatms'][ixsc]#[ixs]
+    nplanets_all = len( names )
+
+    nplanets = len( names )
+    ms_min = 8
+    ms_max = 7*ms_min
+    ms_range = ms_max - ms_min
+    ms_min = 6
+    ms_max = 5*ms_min
+    ms_range3 = ms_max - ms_min
+   
+    n = 3 # number of atmosphere scale heights for transmission signal amplitude
+    delta_tr = (1e6)*2*n*( rplanets*RJUP )*Hatms/( ( rstars*RSUN )**2 )
+
+    # Convert the wavelengths from microns to metres:
+    ref_wav_m = ref_wav_um*( 1e-6 )
+
+    # Using the known Ks magnitude of the target, estimate the
+    # unnormalised signal-to-noise ratio of the change in transit
+    # depth that we would measure in the visible and IR separately:
+    wav_K_m = 2.2e-6
+    wav_V_m = 0.55e-6
+    bratio = planck( ref_wav_m, teffs )/planck( wav_V_m, teffs )
+    mag = vmags - 2.5*np.log10( bratio )
+    flux_unnorm = 10**( -mag/2.5 )
+    snr_unnorm = np.sqrt( flux_unnorm )*delta_tr
+
+    ixs = np.argsort( snr_unnorm )
+    delta_tr_min = delta_tr.min()
+    delta_tr_max = delta_tr.max()
+    delta_tr_range = float( delta_tr_max - delta_tr_min )
+    mplanets_min = mplanets.min()
+    mplanets_max = mplanets.max()
+    mplanets_range = float( mplanets_max - mplanets_min )
+    rplanets_min = rplanets.min()
+    rplanets_max = rplanets.max()
+    rplanets_range = float( rplanets_max - rplanets_min )
+    tpeq_min = tpeqs.min()
+    tpeq_max = tpeqs.max()
+    tpeq_range = tpeq_max - tpeq_min
+    mew = 1
+    text_fs = 18
+    cmap = matplotlib.cm.jet
+    for i in range( nplanets ):
+        tpeq_i = ( tpeqs[ixs][i]-tpeq_min )/tpeq_range
+        c = cmap( tpeq_i )
+        frac = ( delta_tr[ixs][i]-delta_tr_min )/delta_tr_range
+        ms = ms_min + frac*ms_range
+        ax1.plot( [ per[ixs][i] ], [ rplanets[ixs][i] ], 'o', ms=ms, mfc=c, mec='k', mew=mew, zorder=i+1 )
+    ckoi = 0.7*np.ones( 3 )
+    ax1.plot( per_other, rplanets_other, 'o', mfc=ckoi, mec=ckoi, ms=4, zorder=0 )
+
+    ixs = np.isfinite( vmags )
+    nplanets_vmag_finite = ixs.sum()
+    for j in range( nplanets_vmag_finite ):
+        tpeq_j = ( tpeqs[ixs][j]-tpeq_min )/tpeq_range
+        c = cmap( tpeq_j )
+        frac = ( delta_tr[ixs][j]-delta_tr_min )/delta_tr_range
+        ms = ms_min + frac*ms_range
+        ax2.plot( [ mplanets[ixs][j] ], [ vmags[ixs][j] ], 'o', ms=ms, mfc=c, mec='k', mew=mew  )
+        frac = ( rplanets[ixs][j]-rplanets_min )/rplanets_range
+        ms = ms_min + frac*ms_range3
+        ax3.plot( [ delta_tr[ixs][j] ], [ vmags[ixs][j] ], 'o', ms=ms, mfc=c, mec='k', mew=mew  )    
+
+    # Label top ranked planets if requested:
+    if label_top_ranked>0:
+        ixs1 = np.isfinite( vmags )#*np.isfinite( ksmags )
+        ixs2 = np.argsort( snr_unnorm[ixs1] )[::-1]
+        for i in range( int( label_top_ranked ) ):
+            ax1.text( per[ixs1][ixs2][i], rplanets[ixs1][ixs2][i], names[ixs1][ixs2][i], \
+                      fontsize=text_fs, rotation=0., zorder=nplanets+1+i, \
+                      horizontalalignment='left', verticalalignment='center' )
+            ax2.text( mplanets[ixs1][ixs2][i], vmags[ixs1][ixs2][i], names[ixs1][ixs2][i], \
+                      fontsize=text_fs, rotation=0., \
+                      horizontalalignment='left', verticalalignment='center' )            
+            ax3.text( delta_tr[ixs1][ixs2][i], vmags[ixs1][ixs2][i], names[ixs1][ixs2][i], \
+                      fontsize=text_fs, rotation=0., \
+                      horizontalalignment='left', verticalalignment='center' )            
+
+    x1_min = per.min()
+    x1_max = per.max()
+    x1_range = x1_max - x1_min
+    y1_min = rplanets.min()
+    y1_max = rplanets.max()
+    y1_range = y1_max - y1_min
+
+    x2_min = mplanets.min()
+    x2_max = mplanets.max()
+    x2_range = x2_max - x2_min
+    y2_min = vmags[ixs].min()
+    y2_max = vmags[ixs].max()
+    y2_range = y2_max - y2_min
+
+    x3_min = delta_tr.min()
+    x3_max = delta_tr.max()
+    x3_range = x3_max - x3_min
+    y3_min = vmags[ixs].min()
+    y3_max = vmags[ixs].max()
+    y3_range = y3_max - y3_min
+
+    xl1 = 0.8*x1_min
+    xu1 = x1_max+0.1*x1_range
+    ax1.set_xlim( [ xl1, xu1 ] )
+    #ax1.set_ylim( [ y1_min-0.1*y1_range, y1_max+0.1*y1_range ] )
+    ax1.set_ylim( [ 0, y1_max+0.1*y1_range ] )
+    ax2.set_xlim( [ 0, x2_max+0.1*x2_range ] )
+    ax2.set_ylim( [ y2_min-0.1*y2_range, y2_max+0.1*y2_range ] )
+    xl3 = 0.
+    xu3 = x3_max+0.1*x3_range
+    ax3.set_xlim( [ xl3, xu3 ] )
+    ax3.set_ylim( [ y3_min-0.1*y3_range, y3_max+0.1*y3_range ] )
+    x3 = np.r_[ xl3:xu3:1j*500 ]
+
+    vref = 8.0
+    SNref = 5.0
+    Aref = 400
+    SNs = np.array( [ 5.0, 3.0, 1.0 ] )
+    for SN in SNs: 
+        y3 = -5*np.log10( ( Aref/x3 )*( SN/SNref ) ) + vref
+        ax3.plot( x3, y3, color='k', lw=2, zorder=0 )
+        xtext = x3[400]
+        ytext = y3[400] + 0.02
+        text_str = '$\\textnormal{S/N}$'+'$={{{0:.0f}}}$'.format( SN )
+        ax3.text( xtext, ytext, text_str, fontsize=text_fs, rotation=10, zorder=1, \
+                  horizontalalignment='center', verticalalignment='bottom' )
+
+    # Plot marker size indicators outside the axis limits
+    # so that they only appear in the legend:
+    mskey_x1 = 0.2*x1_min
+    mskey_y1 = y1_min-10*y1_range
+    mskey_x2 = 0.2*x2_min
+    mskey_y2 = y2_min-10*y2_range
+    mskey_x3 = 0.2*x3_min
+    mskey_y3 = y3_min-10*y3_range
+
+    frac = ( 100-delta_tr_min )/delta_tr_range
+    ms12 = ms_min + frac*ms_range
+    frac = ( 1-rplanets_min )/rplanets_range
+    ms3jup = ms_min + frac*ms_range3
+    frac = ( REARTH/RJUP-rplanets_min )/rplanets_range
+    ms3earth = ms_min + frac*ms_range3
+
+    ax1.plot( [ mskey_x1 ], [ mskey_y1 ], 'o', ms=ms12, mec='k', mfc='none', \
+              mew=mew, label='$\\textnormal{100ppm}$' )
+    ax2.plot( [ mskey_x2 ], [ mskey_y2 ], 'o', ms=ms12, mec='k', mfc='none', \
+              mew=mew, label='$\\textnormal{100ppm}$' )
+    ax3.plot( [ mskey_x3 ], [ mskey_y3 ], 'o', ms=ms3jup, mec='k', mfc='none', \
+              mew=mew, label='$1R_J$' )
+    ax3.plot( [ mskey_x3 ], [ mskey_y3 ], 'o', ms=ms3earth, mec='k', mfc='none', \
+              mew=mew, label='$1R_E$' )
+    ax1.legend( numpoints=1, fontsize=text_fs )
+    ax2.legend( numpoints=1, fontsize=text_fs )
+    ax3.legend( numpoints=1, fontsize=text_fs, borderpad=1 )
+
+    tpeq_ticks_low = 0
+    while tpeq_ticks_low<tpeq_min:
+        tpeq_ticks_low += 50
+    tpeq_ticks_upp = tpeq_max + 50
+    while tpeq_ticks_upp>tpeq_max:
+        tpeq_ticks_upp -= 50
+    tpeq_ticks = np.arange( tpeq_ticks_low, tpeq_ticks_upp+50, 500 )
+    cb_width = 0.5*hbuff
+    cb_height = axh
+    side_buffer = 0.8*hbuff
+    cb_xlow = xlow + axw + 1.5*side_buffer
+    cb_ylow = ylow
+    cb_axis1 = fig1.add_axes( [ cb_xlow, cb_ylow, cb_width, cb_height] )
+    cb_axis2 = fig2.add_axes( [ cb_xlow, cb_ylow, cb_width, cb_height] )
+    cb_axis3 = fig3.add_axes( [ cb_xlow, cb_ylow, cb_width, cb_height] )
+    cb_norm = matplotlib.colors.Normalize( vmin=tpeq_min, vmax=tpeq_max )
+    cb1 = matplotlib.colorbar.ColorbarBase( cb_axis1, cmap=cmap, norm=cb_norm, orientation='vertical')
+    cb2 = matplotlib.colorbar.ColorbarBase( cb_axis2, cmap=cmap, norm=cb_norm, orientation='vertical')
+    cb3 = matplotlib.colorbar.ColorbarBase( cb_axis3, cmap=cmap, norm=cb_norm, orientation='vertical')
+    cb1.solids.set_rasterized( True )
+    cb2.solids.set_rasterized( True )
+    cb3.solids.set_rasterized( True )
+    cb1.solids.set_edgecolor( 'face' )
+    cb2.solids.set_edgecolor( 'face' )
+    cb3.solids.set_edgecolor( 'face' )
+    cb1.set_ticks( tpeq_ticks )
+    cb2.set_ticks( tpeq_ticks )
+    cb3.set_ticks( tpeq_ticks )
+    
+    tick_fs = 28
+    ax1.tick_params( labelsize=tick_fs )
+    cb_axis1.tick_params( labelsize=tick_fs )
+    ax2.tick_params( labelsize=tick_fs )
+    cb_axis2.tick_params( labelsize=tick_fs )
+    ax3.tick_params( labelsize=tick_fs )
+    cb_axis3.tick_params( labelsize=tick_fs )
+
+    label_fs = 28
+    xlabel_x = xlow + 0.5*axw
+    xlabel_y = 0.2*vbuff
+    xlabel_str1 = '$\\textnormal{Period (day)}$'
+    fig1.text( xlabel_x, xlabel_y, xlabel_str1, fontsize=label_fs, rotation=0., \
+               horizontalalignment='center', verticalalignment='bottom' )
+    xlabel_str2 = '$M_p \ (M_J)$'
+    fig2.text( xlabel_x, xlabel_y, xlabel_str2, fontsize=label_fs, rotation=0., \
+               horizontalalignment='center', verticalalignment='bottom' )
+    xlabel_str3 = '$\\textnormal{Transmission amplitude (ppm)}$'
+    fig3.text( xlabel_x, xlabel_y, xlabel_str3, fontsize=label_fs, rotation=0., \
+               horizontalalignment='center', verticalalignment='bottom' )
+    ylabel_x = xlow - hbuff
+    ylabel_y = ylow + 0.5*axh
+    ylabel_str1 = '$R_p \ (R_J)$'
+    fig1.text( ylabel_x, ylabel_y, ylabel_str1, fontsize=label_fs, rotation=90., \
+               horizontalalignment='right', verticalalignment='center' )
+    ylabel_str2 = '$V \ (\\textnormal{mag})$'
+    fig2.text( ylabel_x, ylabel_y, ylabel_str2, fontsize=label_fs, rotation=90., \
+               horizontalalignment='right', verticalalignment='center' )
+    ylabel_str3 = '$V \ (\\textnormal{mag})$'
+    fig3.text( ylabel_x, ylabel_y, ylabel_str3, fontsize=label_fs, rotation=90., \
+               horizontalalignment='right', verticalalignment='center' )
+
+    cblabel_x = cb_xlow #+ 0.5*cb_width
+    cblabel_y = cb_ylow - 0.6*vbuff
+    cblabel_str = '$T \ (\\textnormal{K})$'
+    fig1.text( cblabel_x, cblabel_y, cblabel_str, fontsize=label_fs, rotation=0., \
+               horizontalalignment='left', verticalalignment='top' )
+    fig2.text( cblabel_x, cblabel_y, cblabel_str, fontsize=label_fs, rotation=0., \
+               horizontalalignment='left', verticalalignment='top' )
+    fig3.text( cblabel_x, cblabel_y, cblabel_str, fontsize=label_fs, rotation=0., \
+               horizontalalignment='left', verticalalignment='top' )
+    
+    ofigname1 = 'transmission_plot1.{0}'.format( output_format )
+    ofigname2 = 'transmission_plot2.{0}'.format( output_format )
+    ofigname3 = 'transmission_plot3.{0}'.format( output_format )
+    fig1.savefig( ofigname1 )
+    fig2.savefig( ofigname2 )
+    fig3.savefig( ofigname3 )
+    print '\nSaved:\n{0}\n{1}\n{2}'.format( ofigname1, ofigname2, ofigname3 )
+
+    plt.ion()
+    matplotlib.rc( 'text', usetex=False )
+
+    return None
 
 
 def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b', \
@@ -317,31 +640,141 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     wav_V_m = 0.55e-6
     wav_K_m = 2.2e-6
 
-    # Make we exclude table rows that do not contain
-    # all the necessary properties:
-    t = filter_table( sigtype='transmission', download_latest=download_latest )
-    nplanets_all = len( t.NAME )
+    z = get_planet_properties(  sigtype='transmission', download_latest=download_latest )
+    names = z['names']
+    ras = z['ras']
+    decs = z['decs']
+    vmags = z['vmags']
+    ksmags = z['ksmags']
+    rstars = z['rstars']
+    teffs = z['teffs']
+    rplanets = z['rplanets']
+    mplanets = z['mplanets']
+    tpeqs = z['tpeqs']
+    Hatms = z['Hatms']
 
-    # Exclude unconfirmed planets:
-    ixsc = []
-    for i in range( nplanets_all ):
-        if t.NAME[i].find( 'KOI' )<0:
-            ixsc += [ i ]
-    ixsc = np.array( ixsc )
-    nplanets = len( t.NAME[ixsc] )
-
-    # First check to make sure we have both a V and Ks
+    # Check to make sure we have both a V and Ks
     # magnitude for the reference star:
-    ix = ( t.NAME==obj_ref )
-    if ( np.isfinite( t.KS[ix] )==False ) or ( np.isfinite( t.V[ix] )==False ):
+    ix = ( names==obj_ref )
+    if ( np.isfinite( ksmags[ix] )==False ) or ( np.isfinite( vmags[ix] )==False ):
         print '\n\nPlease select a different reference star for which we have both a V and Ks magnitude\n\n'
         return None
 
+    # Calculate the radii ratios for each planet:
+    RpRs = ( rplanets*RJUP )/( rstars*RSUN )
+
+    # Calculate the approximate change in transit depth for a
+    # wavelength range where some species in the atmosphere
+    # increases the opacity of the planetary limb for an additional
+    # 2.5 (i.e. 5/2) scale heights:
+    depth_tr = RpRs**2.
+    delta_tr = 2*n*( rplanets*RJUP )*Hatms/( ( rstars*RSUN )**2 )
+
+    # Using the known Ks magnitude of the target, estimate the
+    # unnormalised signal-to-noise ratio of the change in transit
+    # depth that we would measure in the visible and IR separately:
+    bratio = planck( wav_vis_m, teffs )/planck( wav_K_m, teffs )
+    mag = ksmags - 2.5*np.log10( bratio )
+    flux_unnorm = 10**( -mag/2.5 )
+    snr_unnorm_vis = np.sqrt( flux_unnorm )*delta_tr
+
+    bratio = planck( wav_ir_m, teffs )/planck( wav_K_m, teffs )
+    mag = ksmags - 2.5*np.log10( bratio )
+    flux_unnorm = 10**( -mag/2.5 )
+    snr_unnorm_ir = np.sqrt( flux_unnorm )*delta_tr
+
+    # Repeat the above using the known V band for any that didn't
+    # have known KS magnitudes:
+    ixs = ( np.isfinite( ksmags )==False )
+    
+    bratio = planck( wav_vis_m, teffs[ixs] )/planck( wav_V_m, teffs[ixs] )
+    mag = vmags[ixs] - 2.5*np.log10( bratio )
+    flux_unnorm = 10**( -mag/2.5 )
+    snr_unnorm_vis[ixs] = np.sqrt( flux_unnorm )*delta_tr[ixs]
+
+    bratio = planck( wav_ir_m, teffs[ixs] )/planck( wav_V_m, teffs[ixs] )
+    mag = ksmags[ixs] - 2.5*np.log10( bratio )
+    flux_unnorm = 10**( -mag/2.5 )
+    snr_unnorm_ir[ixs] = np.sqrt( flux_unnorm )*delta_tr[ixs]
+
+    # The signal-to-noise ratio is still not normalised, so we need to repeat
+    # the above for another reference star; seeing as the normalising constant
+    # It might be useful to put the signal-to-noise in different units, namely,
+    # compare the size of the current signal to that of another reference target 
+    # at some reference wavelength. Basically repeat the above for the reference:
+    names_new = []
+    for name in names:
+        names_new += [ name.replace( ' ', '' ) ]
+    obj_ref = obj_ref.replace( ' ', '' )
+    names = np.array( names_new, dtype=str )
+    ii = ( names==obj_ref )
+    delta_tr_ref = 2*n*( rplanets[ii]*RJUP )*Hatms[ii]/( ( rstars[ii]*RSUN )**2 )
+    kratio_ref = planck( wav_ref_m, teffs[ii] )/planck( wav_K_m, teffs[ii] )
+
+    mag_ref_ir = ksmags[ii] - 2.5*np.log10( kratio_ref )
+    flux_ref_ir = 10**( -mag_ref_ir/2.5 )
+    snr_ref_ir = np.sqrt( flux_ref_ir )*delta_tr_ref
+
+    mag_ref_vis = vmags[ii] - 2.5*np.log10( kratio_ref )
+    flux_ref_vis = 10**( -mag_ref_vis/2.5 )
+    snr_ref_vis = np.sqrt( flux_ref_vis )*delta_tr_ref
+
+    # Reexpress the signal-to-noise of our target as a scaling of the reference
+    # signal-to-noise:
+    snr_norm_vis = snr_unnorm_vis/snr_ref_vis
+    snr_norm_ir = snr_unnorm_ir/snr_ref_ir
+
+    # Rearrange the confirmed targets in order of the most promising:
+    s = np.argsort( snr_norm_vis )
+    s = s[::-1]
+
+    # Open the output file and write the column headings:
+    nplanets = len( names )
+    ofile = open( outfile, 'w' )
+    header = make_header_transmission( nplanets, wav_vis_m, wav_ir_m, wav_ref_m, obj_ref, n )
+    ofile.write( header )
+    
+    for j in range( nplanets ):
+        i = s[j]
+        if np.isfinite( vmags[i] ):
+            v = '{0:.1f}'.format( vmags[i] )
+        else:
+            v = '-'
+        if np.isfinite( ksmags[i] ):
+            ks = '{0:.1f}'.format( ksmags[i] )
+        else:
+            ks = '-'
+        outstr = make_outstr_transmission( j+1, names[i], ras[i], decs[i], \
+                                           v, ks, rstars[i], rplanets[i], tpeqs[i], \
+                                           Hatms[i], depth_tr[i], delta_tr[i], \
+                                           snr_norm_vis[i], snr_norm_ir[i] )
+        ofile.write( outstr )
+    ofile.close()
+    print 'Saved output in {0}'.format( outfile )
+    
+    return outfile
+
+
+def get_planet_properties( sigtype='transmission', download_latest=True, exclude_kois=True ):
+
+    # Make we exclude table rows that do not contain
+    # all the necessary properties:
+    t = filter_table( sigtype=sigtype, download_latest=download_latest, strict=False )
+    nplanets_all = len( t.NAME )
+
+    # Exclude unconfirmed planets:
+    if exclude_kois==True:
+        ixsc = []
+        for i in range( nplanets_all ):
+            if t.NAME[i].find( 'KOI' )<0:
+                ixsc += [ i ]
+        ixsc = np.array( ixsc )
+    else:
+        ixsc = np.arange( nplanets_all )
+    nplanets = len( t.NAME[ixsc] )
+
     # Calculate the approximate planetary equilibrium temperature:
     tpeq = Teq( t )
-
-    # Calculate the radii ratios for each planet:
-    RpRs = ( t.R*RJUP )/( t.RSTAR*RSUN )
 
     # Calculate the gravitaional accelerations at the surface zero-level:
     MPLANET = np.zeros( nplanets )
@@ -357,98 +790,16 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     # we use RGAS instead of KB because MUJUP is **per mole**:
     Hatm = RGAS*tpeq/MUJUP/little_g
 
-    # Calculate the approximate change in transit depth for a
-    # wavelength range where some species in the atmosphere
-    # increases the opacity of the planetary limb for an additional
-    # 2.5 (i.e. 5/2) scale heights:
-    depth_tr = RpRs**2.
-    delta_tr = 2*n*( t.R*RJUP )*Hatm/( ( t.RSTAR*RSUN )**2 )
+    z = { 'names':t.NAME[ixsc], 'ras':t.RA[ixsc], 'decs':t.DEC[ixsc], \
+          'vmags':t.V[ixsc], 'ksmags':t.KS[ixsc], 'rstars':t.RSTAR[ixsc], \
+          'teffs':t.TEFF[ixsc], 'rplanets':t.R[ixsc], 'mplanets':MPLANET, \
+          'periods':t.PER[ixsc], 'tpeqs':tpeq[ixsc], 'Hatms':Hatm[ixsc] }
 
-    # Using the known Ks magnitude of the target, estimate the
-    # unnormalised signal-to-noise ratio of the change in transit
-    # depth that we would measure in the visible and IR separately:
-    bratio = planck( wav_vis_m, t.TEFF )/planck( wav_K_m, t.TEFF )
-    mag = t.KS - 2.5*np.log10( bratio )
-    flux_unnorm = 10**( -mag/2.5 )
-    snr_unnorm_vis = np.sqrt( flux_unnorm )*delta_tr
-
-    bratio = planck( wav_ir_m, t.TEFF )/planck( wav_K_m, t.TEFF )
-    mag = t.KS - 2.5*np.log10( bratio )
-    flux_unnorm = 10**( -mag/2.5 )
-    snr_unnorm_ir = np.sqrt( flux_unnorm )*delta_tr
-
-    # Repeat the above using the known V band for any that didn't
-    # have known KS magnitudes:
-    ixs = ( np.isfinite( t.KS )==False )
-    
-    bratio = planck( wav_vis_m, t.TEFF[ixs] )/planck( wav_V_m, t.TEFF[ixs] )
-    mag = t.V[ixs] - 2.5*np.log10( bratio )
-    flux_unnorm = 10**( -mag/2.5 )
-    snr_unnorm_vis[ixs] = np.sqrt( flux_unnorm )*delta_tr[ixs]
-
-    bratio = planck( wav_ir_m, t.TEFF[ixs] )/planck( wav_V_m, t.TEFF[ixs] )
-    mag = t.KS[ixs] - 2.5*np.log10( bratio )
-    flux_unnorm = 10**( -mag/2.5 )
-    snr_unnorm_ir[ixs] = np.sqrt( flux_unnorm )*delta_tr[ixs]
-
-    # The signal-to-noise ratio is still not normalised, so we need to repeat
-    # the above for another reference star; seeing as the normalising constant
-    # It might be useful to put the signal-to-noise in different units, namely,
-    # compare the size of the current signal to that of another reference target 
-    # at some reference wavelength. Basically repeat the above for the reference:
-    names = []
-    for name in t.NAME:
-        names += [ name.replace( ' ', '' ) ]
-    obj_ref = obj_ref.replace( ' ', '' )
-    names = np.array( names, dtype=str )
-    ii = ( names==obj_ref )
-    delta_tr_ref = 2*n*( t.R[ii]*RJUP )*Hatm[ii]/( ( t.RSTAR[ii]*RSUN )**2 )
-    kratio_ref = planck( wav_ref_m, t.TEFF[ii] )/planck( wav_K_m, t.TEFF[ii] )
-
-    mag_ref_ir = t.KS[ii] - 2.5*np.log10( kratio_ref )
-    flux_ref_ir = 10**( -mag_ref_ir/2.5 )
-    snr_ref_ir = np.sqrt( flux_ref_ir )*delta_tr_ref
-
-    mag_ref_vis = t.V[ii] - 2.5*np.log10( kratio_ref )
-    flux_ref_vis = 10**( -mag_ref_vis/2.5 )
-    snr_ref_vis = np.sqrt( flux_ref_vis )*delta_tr_ref
-
-    # Reexpress the signal-to-noise of our target as a scaling of the reference
-    # signal-to-noise:
-    snr_norm_vis = snr_unnorm_vis/snr_ref_vis
-    snr_norm_ir = snr_unnorm_ir/snr_ref_ir
-
-    # Rearrange the confirmed targets in order of the most promising:
-    s = np.argsort( snr_norm_vis[ixsc] )
-    s = s[::-1]
-
-    # Open the output file and write the column headings:
-    ofile = open( outfile, 'w' )
-    header = make_header_transmission( nplanets, wav_vis_m, wav_ir_m, wav_ref_m, obj_ref, n )
-    ofile.write( header )
-    
-    for j in range( nplanets ):
-        i = s[j]
-        if np.isfinite( t.V[ixsc][i] ):
-            v = '{0:.1f}'.format( t.V[ixsc][i] )
-        else:
-            v = '-'
-        if np.isfinite( t.KS[ixsc][i] ):
-            ks = '{0:.1f}'.format( t.KS[ixsc][i] )
-        else:
-            ks = '-'
-        outstr = make_outstr_transmission( j+1, t.NAME[ixsc][i], t.RA[ixsc][i], t.DEC[ixsc][i], \
-                                           v, ks, t.RSTAR[ixsc][i], t.R[ixsc][i], tpeq[ixsc][i], \
-                                           Hatm[ixsc][i], depth_tr[ixsc][i], delta_tr[ixsc][i], \
-                                           snr_norm_vis[ixsc][i], snr_norm_ir[ixsc][i] )
-        ofile.write( outstr )
-    ofile.close()
-    print 'Saved output in {0}'.format( outfile )
-    
-    return outfile
+    return z 
 
 
-def filter_table( sigtype=None, download_latest=True ):
+
+def filter_table( sigtype=None, download_latest=True, strict=True ):
     """
     Identify entries from the containing values for all of the
     required properties.
@@ -461,17 +812,18 @@ def filter_table( sigtype=None, download_latest=True ):
     t = t.where( np.isfinite( t.R ) ) # planetary radius
     t = t.where( np.isfinite( t.A ) ) # semimajor axis
     t = t.where( np.isfinite( t.TEFF ) ) # stellar effective temperature
-    if sigtype=='thermal':
-        t = t.where( np.isfinite( t.KS ) ) # stellar Ks magnitude
-    elif sigtype=='transmission':
-        t = t.where( np.isfinite( t.KS ) + np.isfinite( t.V ) ) # stellar Ks and/or V magnitude
-        try:
-            t = t.where( ( np.isfinite( t.MSINI ) * ( t.MSINI>0 ) + \
-                         ( np.isfinite( t.MASS ) * ( t.MASS>0 ) ) ) ) # MSINI and MASS available
-        except:
-            t = t.where( ( np.isfinite( t.MSINI ) * ( t.MSINI>0 ) ) ) # only MSINI available
-    elif sigtype=='reflection':
-        t = t.where( np.isfinite( t.V ) ) # stellar V magnitude
+    if strict==True:
+        if sigtype=='thermal':
+            t = t.where( np.isfinite( t.KS ) ) # stellar Ks magnitude
+        elif sigtype=='transmission':
+            t = t.where( np.isfinite( t.KS ) + np.isfinite( t.V ) ) # stellar Ks and/or V magnitude
+            try:
+                t = t.where( ( np.isfinite( t.MSINI ) * ( t.MSINI>0 ) + \
+                             ( np.isfinite( t.MASS ) * ( t.MASS>0 ) ) ) ) # MSINI and MASS available
+            except:
+                t = t.where( ( np.isfinite( t.MSINI ) * ( t.MSINI>0 ) ) ) # only MSINI available
+        elif sigtype=='reflection':
+            t = t.where( np.isfinite( t.V ) ) # stellar V magnitude
 
     return t
 
