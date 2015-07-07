@@ -776,24 +776,24 @@ def get_planet_properties( sigtype='transmission', download_latest=True, exclude
     # Calculate the approximate planetary equilibrium temperature:
     tpeq = Teq( t )
 
-    # Calculate the gravitaional accelerations at the surface zero-level:
+    # Calculate the gravitational accelerations at the surface zero-level:
     MPLANET = np.zeros( nplanets )
     for i in range( nplanets ):
         try:
-            MPLANET[i] = np.array( t.MASS[i], dtype=float )
+            MPLANET[i] = np.array( t.MASS[ixsc][i], dtype=float )
         except:
-            MPLANET[i] = np.array( t.MSINI[i], dtype=float )
-            print t.NAME[i]
-    little_g = G*MPLANET*MJUP/( ( t.R*RJUP )**2 )
+            MPLANET[i] = np.array( t.MSINI[ixsc][i], dtype=float )
+            print t.NAME[ixsc][i]
+    little_g = G*MPLANET*MJUP/( ( t.R[ixsc]*RJUP )**2 )
 
     # Calculate the atmospheric scale height in metres; note that
     # we use RGAS instead of KB because MUJUP is **per mole**:
-    Hatm = RGAS*tpeq/MUJUP/little_g
+    Hatm = RGAS*tpeq[ixsc]/MUJUP/little_g
 
     z = { 'names':t.NAME[ixsc], 'ras':t.RA[ixsc], 'decs':t.DEC[ixsc], \
           'vmags':t.V[ixsc], 'ksmags':t.KS[ixsc], 'rstars':t.RSTAR[ixsc], \
           'teffs':t.TEFF[ixsc], 'rplanets':t.R[ixsc], 'mplanets':MPLANET, \
-          'periods':t.PER[ixsc], 'tpeqs':tpeq[ixsc], 'Hatms':Hatm[ixsc] }
+          'periods':t.PER[ixsc], 'tpeqs':tpeq[ixsc], 'Hatms':Hatm }
 
     return z 
 
@@ -1214,7 +1214,10 @@ def make_outstr_transmission( rank, name, ra, dec, vmag, kmag, rstar, rp, tpeq, 
     rstar_str = '{0:.1f}'.format( rstar ).center( 6 )
     rp_str = '{0:.1f}'.format( rp ).center( 6 )
     tpeq_str = '{0:4d}'.format( int( tpeq ) ).center( 5 )
-    hatm_str = '{0:d}'.format( int( hatm / (1e3) ) ).rjust( 5 )
+    if np.isfinite( hatm ):
+        hatm_str = '{0:d}'.format( int( hatm / (1e3) ) ).rjust( 5 )
+    else:
+        hatm_str = 'NaN'
     depth_tr_str = '{0:.2f}'.format( (1e2)*depth_tr ).center( 6 )
     delta_tr_str = '{0:.2f}'.format( (1e4)*delta_tr ).center( 6 )
     snr_vis_str = '{0:.2f}'.format( snr_norm_vis ).rjust( 6 )
