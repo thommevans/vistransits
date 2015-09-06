@@ -26,8 +26,8 @@ MUJUP = 2.22e-3 # jupiter atmosphere mean molecular weight in kg/mole
 TR_TABLE = 'exoplanets_transiting.fits' # fits file for known exoplanets that transit
 
 
-def transmission_plots( download_latest=True, label_top_ranked=0, outfile='', output_format='pdf', \
-                        transmission_ref_wav_um=0.6, thermal_ref_wav_um=1.4 ):
+def scatter_plots( download_latest=True, label_top_ranked=0, outfile='', output_format='pdf', \
+                   transmission_ref_wav_um=0.6, thermal_ref_wav_um=1.4 ):
     """
     Aim = To produce the following plots:
     1. period versus radius, with marker size indicating transmission amplitude (i.e. change in 
@@ -134,7 +134,7 @@ def transmission_plots( download_latest=True, label_top_ranked=0, outfile='', ou
 
     # Convert the above to the ratio of the measured fluxes:
     RpRs = ( rplanets*RJUP )/( rstars*RSUN )
-    fratio = (1e6)*bratio*( RpRs**2 )
+    fratio = (1e6)*bratio*( RpRs**2 ) # the (1e6) is to put in units of ppm
 
     # Using the known Ks ( ~2.2microns ) magnitude as a reference,
     # approximate the magnitude in the current wavelength of interest:
