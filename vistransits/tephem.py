@@ -686,6 +686,11 @@ def observatories():
                           'altitude-metres':2380, \
                           'timezone':'America/Santiago' }
 
+    obs_db['CerraTololo'] = { 'lat':'-31:10:10.8', \
+                          'long':'-70:48:23.5', \
+                          'altitude-metres':2207, \
+                          'timezone':'America/Santiago' }
+
     obs_db['MaunaKea'] = { 'lat':'+19:50:00', \
                            'long':'-155:28:00', \
                            'altitude-metres':4190, \
@@ -716,6 +721,10 @@ def observatories():
                            'altitude-metres':2722, \
                            'timezone':'America/Santiago' }
 
+    obs_db['HauteProvence'] = { 'lat':'+43:55:51', \
+                            'long':'5:42:48', \
+                            'altitude-metres':650, \
+                            'timezone':'Europe/Paris' }
     return obs_db
 
 
