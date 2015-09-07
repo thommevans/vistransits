@@ -527,6 +527,11 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     wav_V_m = 0.55e-6
 
     z = get_planet_properties( sigtype='thermal', download_latest=download_latest, exclude_kois=exclude_kois )
+
+    # V mag is required to rank the signal amplitudes:
+    ixs = np.isfinite( z['vmags'] )
+    for key in z.keys():
+        z[key] = z[key][ixs]
     nplanets = len( z['names'] )
 
     # Calculate the equilibrium temperatures for all planets on list:
@@ -661,6 +666,11 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', outfile='sign
     wav_K_m = 2.2e-6
 
     z = get_planet_properties( sigtype='thermal', download_latest=download_latest, exclude_kois=exclude_kois )
+
+    # The K mag is required to rank the signal amplitudes:
+    ixs = np.isfinite( z['ksmags'] )
+    for key in z.keys():
+        z[key] = z[key][ixs]
     nplanets = len( z['names'] )
 
     # Calculate the equilibrium temperatures for all planets on list:
@@ -782,6 +792,15 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
 
     z = get_planet_properties( sigtype='transmission', download_latest=download_latest, \
                                exclude_kois=exclude_kois )
+
+    # Weed out entries that do not have enough information
+    # to provide a rank:
+    ixs = ( np.isfinite( z['vmags'] )+np.isfinite( z['ksmags'] ) ) # required to rank SNR
+    for key in z.keys():
+        z[key] = z[key][ixs]
+    ixs = np.isfinite( z['Hatms'] ) # required to compute signal amplitudes
+    for key in z.keys():
+        z[key] = z[key][ixs]
     names = z['names']
     ras = z['ras']
     decs = z['decs']
