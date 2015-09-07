@@ -26,7 +26,7 @@ MUJUP = 2.22e-3 # jupiter atmosphere mean molecular weight in kg/mole
 TR_TABLE = 'exoplanets_transiting.fits' # fits file for known exoplanets that transit
 
 
-def scatter_plots( download_latest=True, label_top_ranked=0, outfile='', output_format='pdf', \
+def scatter_plots( download_latest=True, label_top_ranked=0, outfile_suffix='', output_format='pdf', \
                    transmission_ref_wav_um=0.6, thermal_ref_wav_um=1.4 ):
     """
     Aim = To produce the following plots:
@@ -480,11 +480,13 @@ def scatter_plots( download_latest=True, label_top_ranked=0, outfile='', output_
                horizontalalignment='left', verticalalignment='top' )
     fig3.text( cblabel_x, cblabel_y, cblabel_str, fontsize=label_fs, rotation=0., \
                horizontalalignment='left', verticalalignment='top' )
-    
-    ofigname1 = 'transmission_plot1.{0}'.format( output_format )
-    ofigname2 = 'transmission_plot2.{0}'.format( output_format )
-    ofigname3 = 'transmission_plot3.{0}'.format( output_format )
-    ofigname4 = 'emission_plot1.{0}'.format( output_format )
+
+    if ( outfile_suffix!='' )*( outfile_suffix!=None ):
+        outfile_suffix = '_{0}'.format( outfile_suffix )
+    ofigname1 = 'transmission_plot1{0}.{1}'.format( outfile_suffix,output_format )
+    ofigname2 = 'transmission_plot2{0}.{1}'.format( outfile_suffix, output_format )
+    ofigname3 = 'transmission_plot3{0}.{1}'.format( outfile_suffix, output_format )
+    ofigname4 = 'emission_plot1{0}.{1}'.format( outfile_suffix, output_format )
     fig1.savefig( ofigname1 )
     fig2.savefig( ofigname2 )
     fig3.savefig( ofigname3 )
@@ -499,7 +501,7 @@ def scatter_plots( download_latest=True, label_top_ranked=0, outfile='', output_
 
 def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b', \
                 outfile='signals_reflection.txt', download_latest=True, \
-                include_thermal_contribution=False ):
+                include_thermal_contribution=False, exclude_kois=True ):
     """
     Generates a table of properties relevant to eclipse measurements at a specified
     wavelength for all known transiting exoplanets, assuming reflected starlight only.
@@ -524,24 +526,15 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     # Central wavelength of V band in m:
     wav_V_m = 0.55e-6
 
-    # Get table data for planets that we have enough information on:
-    t = filter_table( sigtype='reflection', download_latest=download_latest )
-    nplanets_all = len( t.NAME )
-
-    # Exclude unconfirmed planets:
-    ixsc = []
-    for i in range( nplanets_all ):
-        if t.NAME[i].find( 'KOI' )<0:
-            ixsc += [ i ]
-    ixsc = np.array( ixsc )
-    nplanets = len( t.NAME[ixsc] )
+    z = get_planet_properties( sigtype='thermal', download_latest=download_latest, exclude_kois=exclude_kois )
+    nplanets = len( z['names'] )
 
     # Calculate the equilibrium temperatures for all planets on list:
-    tpeq = Teq( t )
+    tpeq = z['tpeqs']
 
     # Calculate other basic quantities:
-    RpRs = ( ( t.R * RJUP)/( t.RSTAR * RSUN ) )
-    aRs = ( ( t.A * AU2M)/( t.RSTAR * RSUN ) )
+    RpRs = ( ( z['rplanets'] * RJUP)/( z['rstars'] * RSUN ) )
+    aRs = ( ( z['as'] * AU2M)/( z['rstars'] * RSUN ) )
     Ag = 1.0 # for reference
 
     # Convert the above to ratio of planet-to-stellar flux:
@@ -552,7 +545,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     Bs = np.zeros( nplanets )
     for i in range( nplanets ):
         Bp[i] = scipy.integrate.quad( planck, wav_meas_m_cuton, wav_meas_m_cutoff, args=( tpeq[i] ) )[0]
-        Bs[i] = scipy.integrate.quad( planck, wav_meas_m_cuton, wav_meas_m_cutoff, args=( t.TEFF[i] ) )[0]
+        Bs[i] = scipy.integrate.quad( planck, wav_meas_m_cuton, wav_meas_m_cutoff, args=( z['teffs'][i] ) )[0]
     fratio_thermal = ( RpRs**2. )*( Bp/Bs )
     if include_thermal_contribution==True:
         fratio_total = fratio_reflection + fratio_thermal
@@ -567,8 +560,8 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
 
     # Using the known V ( ~0.55microns ) magnitude as a reference,
     # approximate the magnitude in the current wavelength of interest:
-    vratio = planck( wav_meas_m_cent, t.TEFF )/planck( wav_ref_m, t.TEFF )
-    mag_star = t.V - 2.5 * np.log10( vratio )
+    vratio = planck( wav_meas_m_cent, z['teffs'] )/planck( wav_ref_m, z['teffs'] )
+    mag_star = z['vmags'] - 2.5 * np.log10( vratio )
 
     # Convert the approximate magnitude to an unnormalised stellar flux 
     # in the wavelength of interest:
@@ -590,7 +583,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     # that we can get a better feel for the size of our target signal at the
     # wavelength we actually want to measure:
     names = []
-    for name in t.NAME:
+    for name in z['names']:
         names += [ name.replace( ' ', '' ) ]
     obj_ref = obj_ref.replace( ' ', '' )
     names = np.array( names, dtype=str )
@@ -603,16 +596,16 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
 
     # Calculate the fraction drop in flux that will occur for the reference
     # system, independent of wavelength:
-    RpRs_ref = ( t.R[ii]*RJUP )/( t.RSTAR[ii]*RSUN )
-    aRs_ref = ( t.A[ii]*AU2M )/( t.RSTAR[ii]*RSUN )
+    RpRs_ref = ( z['rplanets'][ii]*RJUP )/( z['rstars'][ii]*RSUN )
+    aRs_ref = ( z['as'][ii]*AU2M )/( z['rstars'][ii]*RSUN )
     fratio_reflection_ref = Ag*( ( RpRs_ref/aRs_ref )**2. )
 
     # To convert this into a signal-to-noise, we now need to account for the
     # brightness of the reference system at the reference wavelength. To do
     # this, we use the known V band magnitude and then extrapolate from that 
     # to the flux at the reference wavelength assuming blackbody radiation:
-    vratio_ref = planck( wav_ref_m, t.TEFF[ii] ) / planck( wav_V_m, t.TEFF[ii] )
-    mag_ref = t.V[ii] - 2.5*np.log10( vratio_ref )
+    vratio_ref = planck( wav_ref_m, z['teffs'][ii] ) / planck( wav_V_m, z['teffs'][ii] )
+    mag_ref = z['vmags'][ii] - 2.5*np.log10( vratio_ref )
     flux_ref = 10**( -mag_ref/2.5 )
 
     # Then we calculate the signal to noise of the measurement at the
@@ -625,7 +618,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     snr_norm = snr_unnorm / snr_ref
 
     # Rearrange the targets in order of the most promising:
-    s = np.argsort( snr_norm[ixsc] )
+    s = np.argsort( snr_norm )
     s = s[::-1]
 
     # Open the output file and write the column headings:
@@ -636,20 +629,19 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     # Write the output rows to file and save:
     for j in range( nplanets ):
         i = s[j]
-        outstr = make_outstr_reflection( j+1, t.NAME[ixsc][i], t.RA[ixsc][i], t.DEC[ixsc][i], \
-                                         t.V[ixsc][i], t.TEFF[ixsc][i], t.RSTAR[ixsc][i], \
-                                         t.R[ixsc][i], t.A[ixsc][i], tpeq[ixsc][i], \
-                                         RpRs[ixsc][i], fratio_total[ixsc][i], \
-                                         snr_norm[ixsc][i], thermal_frac[ixsc][i] )
+        outstr = make_outstr_reflection( j+1, z['names'][i], z['ras'][i], z['decs'][i], \
+                                         z['vmags'][i], z['teffs'][i], z['rstars'][i], \
+                                         z['rplanets'][i], z['as'][i], tpeq[i], RpRs[i], \
+                                         fratio_total[i], snr_norm[i], thermal_frac[i] )
         ofile.write( outstr )
     ofile.close()
     print 'Saved output in {0}'.format( outfile )
     
     return outfile
 
-    
-def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
-             outfile='signals_thermal.txt', download_latest=True ):
+
+def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', outfile='signals_thermal.txt', \
+             download_latest=True, exclude_kois=True ):
     """
     Generates a table of properties relevant to eclipse measurements at a specified
     wavelength for all known transiting exoplanets, assuming thermal emission only.
@@ -668,36 +660,27 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
     # Central wavelength of K band in m:
     wav_K_m = 2.2e-6
 
-    # Get table data for planets that we have enough information on:
-    t = filter_table( sigtype='thermal', download_latest=download_latest )
-    nplanets_all = len( t.NAME )
-
-    # Exclude unconfirmed planets:
-    ixsc = []
-    for i in range( nplanets_all ):
-        if t.NAME[i].find( 'KOI' )<0:
-            ixsc += [ i ]
-    ixsc = np.array( ixsc )
-    nplanets = len( t.NAME[ixsc] )
+    z = get_planet_properties( sigtype='thermal', download_latest=download_latest, exclude_kois=exclude_kois )
+    nplanets = len( z['names'] )
 
     # Calculate the equilibrium temperatures for all planets on list:
-    tpeq = Teq( t )
+    tpeq = z['tpeqs'] 
 
     # Calculate the radii ratios for each planet:
-    RpRs = ( t.R*RJUP )/( t.RSTAR*RSUN )
+    RpRs = ( z['rplanets']*RJUP )/( z['rstars']*RSUN )
 
     # Assuming black body radiation, calculate the ratio between the
     # energy emitted by the planet per m^2 of surface per second,
     # compared to the star:
-    bratio = planck( wav_meas_m, tpeq )/planck( wav_meas_m, t.TEFF )
+    bratio = planck( wav_meas_m, tpeq )/planck( wav_meas_m, z['teffs'] )
 
     # Convert the above to the ratio of the measured fluxes:
     fratio = bratio*( RpRs**2 )
 
     # Using the known Ks ( ~2.2microns ) magnitude as a reference,
     # approximate the magnitude in the current wavelength of interest:
-    kratio = planck( wav_meas_m, t.TEFF )/planck( wav_K_m, t.TEFF )
-    mag_star = t.KS - 2.5*np.log10( kratio )
+    kratio = planck( wav_meas_m, z['teffs'] )/planck( wav_K_m, z['teffs'] )
+    mag_star = z['ksmags'] - 2.5*np.log10( kratio )
     # Note that this assumes the magnitude of the reference star that
     # the magnitudes such as t.KS are defined wrt is approximately the
     # same at wav and 2.2 microns.
@@ -722,15 +705,16 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
     # that we can get a better feel for the size of our target signal at the
     # wavelength we actually want to measure:
     names = []
-    for name in t.NAME:
+    for name in z['names']:
         names += [ name.replace( ' ', '' ) ]
     obj_ref = obj_ref.replace( ' ', '' )
     names = np.array( names, dtype=str )
     ii = ( names==obj_ref )
-    bratio_ref = planck( wav_ref_m, tpeq[ii] )/planck( wav_ref_m, t.TEFF[ii] )
-    fratio_ref = bratio_ref*( ( t.R[ii]*RJUP )/( t.RSTAR[ii]*RSUN ) )**2
-    kratio_ref = planck( wav_ref_m, t.TEFF[ii] )/planck( wav_K_m, t.TEFF[ii] )
-    mag_ref = t.KS[ii] - 2.5*np.log10( kratio_ref )
+    bratio_ref = planck( wav_ref_m, tpeq[ii] )/planck( wav_ref_m, z['teffs'][ii] )
+    fratio_ref = bratio_ref*( ( z['rplanets'][ii]*RJUP )/( z['rstars'][ii]*RSUN ) )**2
+    kratio_ref = planck( wav_ref_m, z['teffs'][ii] )/planck( wav_K_m, z['teffs'][ii] )
+    mag_ref = z['ksmags'][ii] - 2.5*np.log10( kratio_ref )
+    
     flux_ref = 10**( -mag_ref/2.5 )
 
     # Then we calculate the signal to noise of the measurement at the
@@ -743,7 +727,7 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
     snr_norm = snr_unnorm/snr_ref
 
     # Rearrange the targets in order of the most promising:
-    s = np.argsort( snr_norm[ixsc] )
+    s = np.argsort( snr_norm )
     s = s[::-1]
 
     # Open the output file and write the column headings:
@@ -754,10 +738,10 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
     # Write the output rows to file and save:
     for j in range( nplanets ):
         i = s[j]
-        outstr = make_outstr_thermal( j+1, t.NAME[ixsc][i], t.RA[ixsc][i], t.DEC[ixsc][i], \
-                                      t.KS[ixsc][i], t.TEFF[ixsc][i], t.RSTAR[ixsc][i], \
-                                      t.R[ixsc][i], t.A[ixsc][i], tpeq[ixsc][i], \
-                                      fratio[ixsc][i], snr_norm[ixsc][i] )
+        outstr = make_outstr_thermal( j+1, z['names'][i], z['ras'][i], z['decs'][i], \
+                                      z['ksmags'][i], z['teffs'][i], z['rstars'][i], \
+                                      z['rplanets'][i], z['as'][i], tpeq[i], \
+                                      fratio[i], snr_norm[i] )
         ofile.write( outstr )
     ofile.close()
     print 'Saved output in {0}'.format( outfile )
@@ -766,7 +750,7 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
 
 
 def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
-                  outfile='signals_transits.txt', download_latest=True ):
+                  outfile='signals_transits.txt', download_latest=True, exclude_kois=True ):
     """
     Generates a table of properties relevant to transmission spectroscopy measurements
     at a visible wavelength and an IR wavelength for all known transiting exoplanets.
@@ -796,7 +780,8 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     wav_V_m = 0.55e-6
     wav_K_m = 2.2e-6
 
-    z = get_planet_properties(  sigtype='transmission', download_latest=download_latest )
+    z = get_planet_properties( sigtype='transmission', download_latest=download_latest, \
+                               exclude_kois=exclude_kois )
     names = z['names']
     ras = z['ras']
     decs = z['decs']
@@ -948,7 +933,7 @@ def get_planet_properties( sigtype='transmission', download_latest=True, exclude
 
     z = { 'names':t.NAME[ixsc], 'ras':t.RA[ixsc], 'decs':t.DEC[ixsc], \
           'vmags':t.V[ixsc], 'ksmags':t.KS[ixsc], 'rstars':t.RSTAR[ixsc], \
-          'teffs':t.TEFF[ixsc], 'rplanets':t.R[ixsc], 'mplanets':MPLANET, \
+          'as':t.A[ixsc], 'teffs':t.TEFF[ixsc], 'rplanets':t.R[ixsc], 'mplanets':MPLANET, \
           'periods':t.PER[ixsc], 'tpeqs':tpeq[ixsc], 'Hatms':Hatm }
 
     return z 
