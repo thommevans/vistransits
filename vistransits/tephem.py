@@ -112,7 +112,7 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
             ofilename_byplanet = '{0}_reflection_byplanet.txt'.format( observatory )
             ofilename_chronolog = '{0}_reflection_chronolog.txt'.format( observatory )            
         else:
-            pdb.set_trace() #this shouldn't happen
+            pdb.set_trace() # sigtype not recognised
 
     # Create the strings that will be used for column headers:
     colheadingsa_bp, colheadingsb_bp = make_colheadings( 'byplanet' )
@@ -135,7 +135,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     elif sigtype=='reflection':
         sigtype_lower_singular = 'reflection'
         sigtype_upper_singular = 'Reflection'
-
+    else:
+        pdb.set_trace() # sigtype not recognised
 
     ofile_bp.write( '# Visible {0} targets from {1} between {2} and {3}, arranged by planet\n#\n'\
                  .format( sigtype_lower_singular, observatory, date_start, date_end ) )
@@ -272,9 +273,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
             ttr_i -= 0.5 * per_i
         elif sigtype!='transits':
             pdb.set_trace() # if stopped here, make sure sigtype is valid
-
-        #if target_i.name=='WASP-43b':
-        #    pdb.set_trace()
+        else:
+            pdb.set_trace() # sigtype not recognised
 
         # Find the transit with mid-time occurring immediately
         # before the observing run:
@@ -347,6 +347,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
                     elif ( sigtype=='thermal' )+( sigtype=='reflection' ):
                         header_str = '#  {0}   -->   not enough information to rank secondary eclipse signal \n#\n'\
                                      .format( targets[i]  )
+                    else:
+                        pdb.set_trace() # sigtype not recognised
                 else:
                     if sigtype=='transits':
                         header_str = '#  {0}   -->   primary transit signal ranked {1} out of {2} \n#\n'\
@@ -354,6 +356,8 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
                     elif ( sigtype=='thermal' )+( sigtype=='reflection' ):
                         header_str = '#  {0}   -->   secondary eclipse signal ranked {1} out of {2} \n#\n'\
                                      .format( targets[i], str( rank_i ), str( nranked ) )
+                    else:
+                        pdb.set_trace() # sigtype not recognised
                 header_str += '#  RA (hh mm ss.s) Dec (dd mm ss.s)\n'
                 ra_str = ras[i].replace( ':', ' ' )
                 dec_str = decs[i].replace( ':', ' ' )
