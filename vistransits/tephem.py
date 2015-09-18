@@ -24,7 +24,7 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
 
       >observatory-name<_transits.txt  or  >observatory-name<_eclipses.txt
 
-    depending on whether sigtype='transits' (default) or sigtype='eclipses'.
+    depending on whether sigtype='transits' (default) or sigtype='thermal' or sigtype='reflection'.
 
     INPUTS
       **observatory - String matching one of the observatory string identifiers used in
@@ -268,8 +268,13 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
         # If we're wanting eclipse information, approximate the eclipse
         # time by subtracting half a period (the more eccentric the orbit,
         # the worse this approximation will be):
-        if sigtype=='eclipses':
+        if ( sigtype=='thermal' )+( sigtype=='reflection' ):
             ttr_i -= 0.5 * per_i
+        elif sigtype!='transits':
+            pdb.set_trace() # if stopped here, make sure sigtype is valid
+
+        #if target_i.name=='WASP-43b':
+        #    pdb.set_trace()
 
         # Find the transit with mid-time occurring immediately
         # before the observing run:

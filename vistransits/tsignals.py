@@ -332,6 +332,9 @@ def scatter_plots( download_latest=True, label_top_ranked=0, outfile_suffix='', 
     yu4 = y4_max+0.1*y4_range
     ax4.set_ylim( [ yl4, yu4 ] )
     x4 = np.r_[ np.log10( xl4 ):np.log10( xu4 ):1j*500 ]
+    # Note that x4 are the logarithms! Hence why they are
+    # raised as 10**x4 below. This seems to have been done
+    # so xl4 and xu4 could be set as 4 instead of 10,000 etc.
 
     # Transmission signal contours:
     vref = 8.0
@@ -348,6 +351,16 @@ def scatter_plots( download_latest=True, label_top_ranked=0, outfile_suffix='', 
                   horizontalalignment='center', verticalalignment='bottom' )
 
     # Emission signal contours:
+    # These calculations start with the fact that we can
+    # rescale the SN from some reference signal with amplitude Aref
+    # for some star with flux fref, where given our measurements
+    # we know we can achieve a SN for the reference star of SNref.
+    # This implies that: SN = sqrt(f/fref)*(A/Aref)*SNref
+    # where SN is the SN we'd achieve for an arbitrary system with
+    # signal amplitude A and flux f. To use magnitudes, use the fact
+    # that: k-kref = -2.5*log10(f/fref)
+    # We can then combine all this and arrive at:
+    #    k = -5*log10[ (Aref/A)*(SN/SNref) ] + kref
     ksref = 8.0
     SNref = 5.0
     Aref = 1000
