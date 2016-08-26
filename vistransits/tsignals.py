@@ -7,11 +7,11 @@ import tutilities
 import matplotlib
 import matplotlib.pyplot as plt
 
-G = 6.67428e-11 # gravitational constant in m^3/kg^-1/s^-2
+G = 6.67428e-11 # gravitational constant in m^3 kg^-1 s^-2
 HPLANCK = 6.62607e-34 # planck's constant in J*s
-C = 2.99792e8 # speed of light in vacuum in m/s
-KB = 1.3806488e-23 # boltzmann constant in J/K
-RGAS = 8.314 # gas constant in J/mol/K
+C = 2.99792e8 # speed of light in vacuum in m s^-1
+KB = 1.3806488e-23 # boltzmann constant in J K^-1
+RGAS = 8.314 # gas constant in J mol^-1 K^-1
 RSUN = 6.9551e8 # solar radius in m
 RJUP = 7.1492e7 # jupiter radius in m
 RSAT = 5.8232e7 # saturn radius in m
@@ -22,7 +22,7 @@ MSAT = 5.683e26 # saturn mass in kg
 MNEP = 1.024e26 # neptune mass in kg
 MEARTH = 5.972e24 # earth mass in kg
 AU2M = 1.49598e11 # au to metres conversion factor
-MUJUP = 2.22e-3 # jupiter atmosphere mean molecular weight in kg/mole
+MUJUP = 2.22e-3 # jupiter atmosphere mean molecular weight in kg mole^-1
 TR_TABLE = 'exoplanets_transiting.fits' # fits file for known exoplanets that transit
 
 
