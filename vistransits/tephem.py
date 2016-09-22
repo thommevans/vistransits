@@ -272,9 +272,7 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
         if ( sigtype=='thermal' )+( sigtype=='reflection' ):
             ttr_i -= 0.5 * per_i
         elif sigtype!='transits':
-            pdb.set_trace() # if stopped here, make sure sigtype is valid
-        else:
-            pdb.set_trace() # sigtype not recognised
+            pdb.set_trace() # if stopped here, sigtype is not recognised
 
         # Find the transit with mid-time occurring immediately
         # before the observing run:
