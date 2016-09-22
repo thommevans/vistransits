@@ -568,7 +568,7 @@ def calc_visible( observatory, date_start, date_end, sigtype='transits', \
     return ofilename_byplanet, ofilename_chronolog
 
 
-def make_eph( exclude_unconfirmed=True ):
+def make_eph( exclude_unconfirmed=True, extra_planets={} ):
     """
     Generates the ephemerides file for all of the transiting exoplanets in
     the exoplanets.org database.
@@ -579,6 +579,8 @@ def make_eph( exclude_unconfirmed=True ):
     if os.path.isfile( tr_file )==False:
         tutilities.download_data()
     t = atpy.Table( tr_file )
+    if ( extra_planets!=None )*( extra_planets!={} ):
+        t = tutilities.table_append( t, extra_planets )
 
     # Open and prepare file for output writing to:
     eph_file_w = open( EPH_FILE, 'w' )
@@ -599,6 +601,7 @@ def make_eph( exclude_unconfirmed=True ):
             confirmed = True
         if ( confirmed==False )*( exclude_unconfirmed==True ):
             continue
+        #if t.NAME[q[i]]=='WASP-121b': pdb.set_trace()
         ostr = '{0:15s}  {1:.1f}  {2:s}  {3:s}  {4:15.7f}  {5:13.8f}  {6:8.4f} \n'\
                .format( t.NAME[ q[i] ].replace(' ',''), t.V[ q[i] ], t.RA_STRING[ q[i] ], \
                        t.DEC_STRING[ q[i] ], t.TT[ q[i] ], t.PER[ q[i] ], t.T14[ q[i] ]*24. )

@@ -27,7 +27,7 @@ TR_TABLE = 'exoplanets_transiting.fits' # fits file for known exoplanets that tr
 
 
 def scatter_plots( download_latest=True, label_top_ranked=0, outfile_suffix='', output_format='pdf', \
-                   transmission_ref_wav_um=0.6, thermal_ref_wav_um=1.4 ):
+                   transmission_ref_wav_um=0.6, thermal_ref_wav_um=1.4, extra_planets={} ):
     """
     Aim = To produce the following plots:
     1. period versus radius, with marker size indicating transmission amplitude (i.e. change in 
@@ -71,7 +71,8 @@ def scatter_plots( download_latest=True, label_top_ranked=0, outfile_suffix='', 
     #ax4.xaxis.set_major_formatter( matplotlib.ticker.ScalarFormatter() )
 
     sigtype = 'transmission'
-    z = get_planet_properties(  sigtype=sigtype, download_latest=download_latest, exclude_kois=False )
+    z = get_planet_properties(  sigtype=sigtype, download_latest=download_latest, \
+                                exclude_kois=False, extra_planets=extra_planets )
     names = z['names']
     ras = z['ras']
     decs = z['decs']
@@ -514,7 +515,7 @@ def scatter_plots( download_latest=True, label_top_ranked=0, outfile_suffix='', 
 
 def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b', \
                 outfile='signals_reflection.txt', download_latest=True, \
-                include_thermal_contribution=False, exclude_kois=True ):
+                include_thermal_contribution=False, exclude_kois=True, extra_planets={} ):
     """
     Generates a table of properties relevant to eclipse measurements at a specified
     wavelength for all known transiting exoplanets, assuming reflected starlight only.
@@ -539,7 +540,8 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
     # Central wavelength of V band in m:
     wav_V_m = 0.55e-6
 
-    z = get_planet_properties( sigtype='thermal', download_latest=download_latest, exclude_kois=exclude_kois )
+    z = get_planet_properties( sigtype='thermal', download_latest=download_latest, \
+                               exclude_kois=exclude_kois, extra_planets=extra_planets )
 
     # V mag is required to rank the signal amplitudes:
     ixs = np.isfinite( z['vmags'] )
@@ -659,7 +661,7 @@ def reflection( wav_meas_um=[ 0.55, 0.80 ], wav_ref_um=0.55, obj_ref='HD189733b'
 
 
 def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', outfile='signals_thermal.txt', \
-             download_latest=True, exclude_kois=True ):
+             download_latest=True, exclude_kois=True, extra_planets={} ):
     """
     Generates a table of properties relevant to eclipse measurements at a specified
     wavelength for all known transiting exoplanets, assuming thermal emission only.
@@ -678,7 +680,8 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', outfile='sign
     # Central wavelength of K band in m:
     wav_K_m = 2.2e-6
 
-    z = get_planet_properties( sigtype='thermal', download_latest=download_latest, exclude_kois=exclude_kois )
+    z = get_planet_properties( sigtype='thermal', download_latest=download_latest, \
+                               exclude_kois=exclude_kois, extra_planets=extra_planets )
 
     # The K mag is required to rank the signal amplitudes:
     ixs = np.isfinite( z['ksmags'] )
@@ -773,7 +776,7 @@ def thermal( wav_meas_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', outfile='sign
 
 
 def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-19 b', \
-                  outfile='signals_transits.txt', download_latest=True, exclude_kois=True ):
+                  outfile='signals_transits.txt', download_latest=True, exclude_kois=True, extra_planets={} ):
     """
     Generates a table of properties relevant to transmission spectroscopy measurements
     at a visible wavelength and an IR wavelength for all known transiting exoplanets.
@@ -804,7 +807,7 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     wav_K_m = 2.2e-6
 
     z = get_planet_properties( sigtype='transmission', download_latest=download_latest, \
-                               exclude_kois=exclude_kois )
+                               exclude_kois=exclude_kois, extra_planets=extra_planets )
 
     # Weed out entries that do not have enough information
     # to provide a rank:
@@ -928,11 +931,20 @@ def transmission( wav_vis_um=0.7, wav_ir_um=2.2, wav_ref_um=2.2, obj_ref='WASP-1
     return outfile
 
 
-def get_planet_properties( sigtype='transmission', download_latest=True, exclude_kois=True ):
+def get_planet_properties( sigtype='transmission', download_latest=True, exclude_kois=True, extra_planets={} ):
+    """
+    Note that extra planets is a list of dictionaries containing properties for additional
+    planets not contained on exoplanets.org. The minimum required properties for all 
+    vistransits routines to work are: 
+    NAME, RA_STRING, DEC_STRING, V, KS, RSTAR, TEFF, A, PER, MASS, MSINI, R, TT, T14
+    """
 
     # Make we exclude table rows that do not contain
     # all the necessary properties:
     t = filter_table( sigtype=sigtype, download_latest=download_latest, strict=False )
+
+    if ( extra_planets!=None )*( extra_planets!={} ):
+        t = tutilities.table_append( t, extra_planets )
     nplanets_all = len( t.NAME )
 
     # Exclude unconfirmed planets:
